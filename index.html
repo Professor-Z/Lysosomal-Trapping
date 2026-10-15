@@ -1,0 +1,714 @@
+<!--
+  Copyright 2026 Zerubba Levi
+  This simulation is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0).
+  
+  License Restrictions Summary:
+  - Attribution: You must give appropriate credit and provide a link to the license.
+  - NonCommercial: You may not use the material for commercial purposes.
+  - ShareAlike: If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
+  
+  To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-sa/4.0/
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Lysosomal Trapping Simulation</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      background-color: #121212;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    #sim-container {
+      position: relative;
+      width: 100%;
+      max-width: 1000px;
+      aspect-ratio: 900 / 650;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border-radius: 8px;
+      overflow: hidden;
+      background-color: #D7EBF0;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="sim-container">
+  <canvas id="simCanvas"></canvas>
+  <button id="open-info-modal" style="position: absolute; bottom: 8px; right: 8px; z-index: 20; background: rgba(255,255,255,0.85); border: 1px solid #b4b4b4; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; color: #333; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">ℹ️ About / Copyright</button>
+</div>
+
+<!-- Info / Copyright Modal Overlay -->
+<div id="info-modal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; justify-content: center; align-items: center; padding: 20px; font-family: Arial, sans-serif;">
+  <div style="background: #ffffff; color: #141414; border-radius: 8px; max-width: 500px; width: 100%; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); display: flex; flex-direction: column;">
+    <div style="background: #1E5096; color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-weight: bold; font-size: 16px;">About & Copyright Information</span>
+      <button id="close-info-modal" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; font-weight: bold;">&times;</button>
+    </div>
+    <div style="padding: 20px; font-size: 14px; line-height: 1.5; display: flex; flex-direction: column; gap: 12px;">
+      <div>
+        <strong>Lysosomal Trapping Simulation</strong><br>
+        Created by <strong>Zerubba Levi</strong> for chemistry and pharmacology education.
+      </div>
+      <div style="background: #f0f0f0; padding: 10px 12px; border-radius: 6px; font-size: 13px;">
+        <strong>License:</strong> Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)<br>
+        Other professors and educators are free to use, share, and adapt this simulation for non-commercial educational purposes, provided full attribution is given and modified versions share this same license.
+      </div>
+      <div>
+        <strong>Feedback & Revisions:</strong><br>
+        Found a bug or have a suggestion for improving this simulation? Reach out with suggested revisions and feedback at <a href="mailto:zelevi@cabrillo.edu" style="color: #2864DC; font-weight: bold; text-decoration: none;">zelevi@cabrillo.edu</a>.
+      </div>
+    </div>
+    <div style="background: #f9f9f9; padding: 12px 20px; border-top: 1px solid #e0e0e0; display: flex; justify-content: flex-end;">
+      <button id="modal-ok-btn" style="background: #1E5096; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px;">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Modal Logic
+const infoModal = document.getElementById('info-modal');
+const openInfoModalBtn = document.getElementById('open-info-modal');
+const closeInfoModalBtn = document.getElementById('close-info-modal');
+const modalOkBtn = document.getElementById('modal-ok-btn');
+
+openInfoModalBtn.addEventListener('click', () => { infoModal.style.display = 'flex'; });
+closeInfoModalBtn.addEventListener('click', () => { infoModal.style.display = 'none'; });
+modalOkBtn.addEventListener('click', () => { infoModal.style.display = 'none'; });
+infoModal.addEventListener('click', (e) => {
+  if (e.target === infoModal) infoModal.style.display = 'none';
+});
+
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+
+// Logical Internal Dimensions
+const LOGICAL_WIDTH = 900;
+const LOGICAL_HEIGHT = 650;
+
+// Simulation Parameters
+const PH_CYTOSOL = 7.0;
+const PH_LYSOSOME = 5.0;
+let LYSO_CENTER = { x: LOGICAL_WIDTH / 2, y: (LOGICAL_HEIGHT - 110) / 2 };
+const LYSO_RADIUS = 160;
+const HALF_THICKNESS = 12;
+const BUFFER = 10;
+const N_LIPIDS = 135;
+const NUM_PARTICLES = 300;
+const PARTICLE_RADIUS = 5;
+
+const MEMBRANE_SPEED_FACTOR = 0.25;
+const VELOCITY_SIGMA = 1.0;
+const MAX_SPEED_BASE = 3.0;
+
+// Colors
+const COLOR_CYTOSOL = "#D7EBF0";
+const COLOR_LYSOSOME = "#D2D2D2";
+const COLOR_NEUTRAL = "#DC3232";
+const COLOR_IONIZED = "#2864DC";
+const COLOR_PROTON = "#FFFFFF";
+const COLOR_TEXT = "#141414";
+const COLOR_UI_BG = "#F0F0F0";
+
+const COLOR_PAUSE_BG = "#DC3C3C";
+const COLOR_PLAY_BG = "#28A046";
+const COLOR_RESET_BG = "#5A6E82";
+const COLOR_BTN_TEXT = "#FFFFFF";
+
+const HEAD_COLOR = "#464646";
+const HEAD_OUTLINE = "#141414";
+const TAIL_COLOR = "#787878";
+
+// Global UI State
+let pka = 8.00;
+let speedMult = 1.0;
+let paused = true;
+let draggingPka = false;
+let draggingSpeed = false;
+let simTime = 0.0;
+
+// Rolling Window Variables
+let ratioSamples = [];
+let lastUpdateTime = 0.0;
+let displayedTrappingRatio = 0.0;
+
+// Helper: Henderson-Hasselbalch Equation
+function calcFIonized(pKaVal, phVal) {
+  const ratio = Math.pow(10, pKaVal - phVal);
+  return ratio / (1.0 + ratio);
+}
+
+// Helper: Normal Gaussian Random
+function randomGauss(mean = 0, stdev = 1) {
+  const u = 1 - Math.random();
+  const v = Math.random();
+  const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  return z * stdev + mean;
+}
+
+// Helper: Wavy Membrane Boundaries
+function getLysoRadiusAt(angle, t) {
+  const wave = 4.0 * Math.sin(5 * angle + t * 1.8) + 2.5 * Math.sin(9 * angle - t * 2.3);
+  return LYSO_RADIUS + wave;
+}
+
+function getMembraneBoundaries(angle, t) {
+  const rMid = getLysoRadiusAt(angle, t);
+  return [rMid - HALF_THICKNESS, rMid + HALF_THICKNESS];
+}
+
+// Draw Wiggly Lipid Tails
+function drawWigglyTail(ctx, startX, startY, endX, endY, tx, ty, phase) {
+  ctx.beginPath();
+  const steps = 4;
+  for (let k = 0; k <= steps; k++) {
+    const u = k / steps;
+    const bx = (1.0 - u) * startX + u * endX;
+    const by = (1.0 - u) * startY + u * endY;
+    const amp = 2.4 * u;
+    const wiggle = amp * Math.sin(u * Math.PI * 2.5 + phase);
+    const px = bx + wiggle * tx;
+    const py = by + wiggle * ty;
+    if (k === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.strokeStyle = TAIL_COLOR;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+// Render Lipid Bilayer
+function drawFluidLipidBilayer(ctx, t) {
+  // Inner Lysosome Fill
+  ctx.beginPath();
+  for (let i = 0; i < N_LIPIDS; i++) {
+    const angle = (2 * Math.PI / N_LIPIDS) * i;
+    const [rIn] = getMembraneBoundaries(angle, t);
+    const px = LYSO_CENTER.x + Math.cos(angle) * rIn;
+    const py = LYSO_CENTER.y + Math.sin(angle) * rIn;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = COLOR_LYSOSOME;
+  ctx.fill();
+
+  // Draw Lipids
+  for (let i = 0; i < N_LIPIDS; i++) {
+    const angle = (2 * Math.PI / N_LIPIDS) * i;
+    const nx = Math.cos(angle), ny = Math.sin(angle);
+    const tx = -Math.sin(angle), ty = Math.cos(angle);
+
+    const rMid = getLysoRadiusAt(angle, t);
+    const [rIn, rOut] = getMembraneBoundaries(angle, t);
+
+    const ohx = LYSO_CENTER.x + nx * rOut, ohy = LYSO_CENTER.y + ny * rOut;
+    const ihx = LYSO_CENTER.x + nx * rIn, ihy = LYSO_CENTER.y + ny * rIn;
+    const mx = LYSO_CENTER.x + nx * rMid, my = LYSO_CENTER.y + ny * rMid;
+
+    const tailOffset = 1.8;
+
+    // Outer Leaflet Tails
+    drawWigglyTail(ctx, ohx - nx*3 + tx*tailOffset, ohy - ny*3 + ty*tailOffset, mx + tx*tailOffset, my + ty*tailOffset, tx, ty, i * 0.7 + t * 4.0);
+    drawWigglyTail(ctx, ohx - nx*3 - tx*tailOffset, ohy - ny*3 - ty*tailOffset, mx - tx*tailOffset, my - ty*tailOffset, tx, ty, i * 0.7 + 1.8 + t * 4.0);
+
+    // Inner Leaflet Tails
+    drawWigglyTail(ctx, ihx + nx*3 + tx*tailOffset, ihy + ny*3 + ty*tailOffset, mx + tx*tailOffset, my + ty*tailOffset, tx, ty, i * 0.7 + 3.1 + t * 4.0);
+    drawWigglyTail(ctx, ihx + nx*3 - tx*tailOffset, ihy + ny*3 - ty*tailOffset, mx - tx*tailOffset, my - ty*tailOffset, tx, ty, i * 0.7 + 4.5 + t * 4.0);
+
+    // Polar Head Groups
+    ctx.beginPath();
+    ctx.arc(ohx, ohy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = HEAD_OUTLINE;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(ohx, ohy, 4, 0, Math.PI * 2);
+    ctx.fillStyle = HEAD_COLOR;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(ihx, ihy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = HEAD_OUTLINE;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(ihx, ihy, 4, 0, Math.PI * 2);
+    ctx.fillStyle = HEAD_COLOR;
+    ctx.fill();
+  }
+}
+
+// Particle Class
+class Particle {
+  constructor(x, y, initialPka, t) {
+    this.x = x;
+    this.y = y;
+    this.radius = PARTICLE_RADIUS;
+
+    this.vx = randomGauss(0, VELOCITY_SIGMA);
+    this.vy = randomGauss(0, VELOCITY_SIGMA);
+    this.clampSpeed(1.0);
+
+    this.compartment = 'outside';
+    const fIonized = calcFIonized(initialPka, PH_CYTOSOL);
+    this.state = Math.random() < fIonized ? 'ionized' : 'neutral';
+  }
+
+  clampSpeed(speedMultiplier) {
+    const maxSpeed = MAX_SPEED_BASE * speedMultiplier;
+    const minSpeed = 0.2 * speedMultiplier;
+    const speed = Math.hypot(this.vx, this.vy);
+    if (speed > maxSpeed) {
+      this.vx = (this.vx / speed) * maxSpeed;
+      this.vy = (this.vy / speed) * maxSpeed;
+    } else if (speed < minSpeed) {
+      const angle = Math.random() * Math.PI * 2;
+      this.vx = Math.cos(angle) * minSpeed;
+      this.vy = Math.sin(angle) * minSpeed;
+    }
+  }
+
+  updateState(pKaVal, t, instant = false) {
+    const dx = this.x - LYSO_CENTER.x;
+    const dy = this.y - LYSO_CENTER.y;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const [rIn, rOut] = getMembraneBoundaries(angle, t);
+
+    // Block state changes inside bilayer
+    if (dist >= rIn && dist <= rOut) return;
+
+    let ph = dist < rIn ? PH_LYSOSOME : PH_CYTOSOL;
+    this.compartment = dist < rIn ? 'inside' : 'outside';
+
+    const fIonized = calcFIonized(pKaVal, ph);
+
+    if (instant || Math.random() < 0.10) {
+      this.state = Math.random() < fIonized ? 'ionized' : 'neutral';
+    }
+  }
+
+  enforceMembraneBoundary(t) {
+    if (this.state === 'ionized') {
+      let dx = this.x - LYSO_CENTER.x;
+      let dy = this.y - LYSO_CENTER.y;
+      let dist = Math.hypot(dx, dy) || 1;
+      const nx = dx / dist, ny = dy / dist;
+
+      const angle = Math.atan2(dy, dx);
+      const [rIn, rOut] = getMembraneBoundaries(angle, t);
+
+      if (this.compartment === 'inside') {
+        const rMaxAllowed = rIn - BUFFER;
+        if (dist > rMaxAllowed) {
+          this.x = LYSO_CENTER.x + nx * rMaxAllowed;
+          this.y = LYSO_CENTER.y + ny * rMaxAllowed;
+          const dot = this.vx * nx + this.vy * ny;
+          if (dot > 0) {
+            this.vx -= 2 * dot * nx;
+            this.vy -= 2 * dot * ny;
+          }
+        }
+      } else {
+        const rMinAllowed = rOut + BUFFER;
+        if (dist < rMinAllowed) {
+          this.x = LYSO_CENTER.x + nx * rMinAllowed;
+          this.y = LYSO_CENTER.y + ny * rMinAllowed;
+          const dot = this.vx * nx + this.vy * ny;
+          if (dot < 0) {
+            this.vx -= 2 * dot * nx;
+            this.vy -= 2 * dot * ny;
+          }
+        }
+      }
+    }
+  }
+
+  move(pKaVal, t, speedMultiplier) {
+    this.updateState(pKaVal, t);
+
+    const dx = this.x - LYSO_CENTER.x;
+    const dy = this.y - LYSO_CENTER.y;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const [rIn, rOut] = getMembraneBoundaries(angle, t);
+
+    const effectiveSpeed = (dist >= rIn && dist <= rOut) 
+      ? speedMultiplier * MEMBRANE_SPEED_FACTOR 
+      : speedMultiplier;
+
+    let nextX = this.x + this.vx * effectiveSpeed;
+    let nextY = this.y + this.vy * effectiveSpeed;
+
+    if (nextX < 15 || nextX > LOGICAL_WIDTH - 15) {
+      this.vx *= -1;
+      nextX = this.x;
+    }
+    if (nextY < 15 || nextY > LOGICAL_HEIGHT - 140) {
+      this.vy *= -1;
+      nextY = this.y;
+    }
+
+    this.x = nextX;
+    this.y = nextY;
+
+    this.enforceMembraneBoundary(t);
+    this.clampSpeed(speedMultiplier);
+  }
+
+  draw(ctx) {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    if (this.state === 'ionized') {
+      ctx.fillStyle = COLOR_IONIZED;
+      ctx.fill();
+
+      // Attached Proton (H+)
+      const protonX = this.x + this.radius * 0.6;
+      const protonY = this.y - this.radius * 0.6;
+      ctx.beginPath();
+      ctx.arc(protonX, protonY, 2, 0, Math.PI * 2);
+      ctx.fillStyle = COLOR_PROTON;
+      ctx.fill();
+    } else {
+      ctx.fillStyle = COLOR_NEUTRAL;
+      ctx.fill();
+    }
+  }
+}
+
+// Particle Collisions
+function handleParticleCollisions(particles, t, speedMultiplier) {
+  const cellSize = PARTICLE_RADIUS * 3;
+  const grid = new Map();
+
+  for (const p of particles) {
+    const key = `${Math.floor(p.x / cellSize)},${Math.floor(p.y / cellSize)}`;
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(p);
+  }
+
+  for (const [key, cellParticles] of grid.entries()) {
+    const [cx, cy] = key.split(',').map(Number);
+
+    for (let ncx = cx; ncx <= cx + 1; ncx++) {
+      for (let ncy = cy - 1; ncy <= cy + 1; ncy++) {
+        if (ncx === cx && ncy < cy) continue;
+        const neighborKey = `${ncx},${ncy}`;
+        const neighborCell = grid.get(neighborKey);
+        if (!neighborCell) continue;
+
+        for (const p1 of cellParticles) {
+          for (const p2 of neighborCell) {
+            if (p1 === p2) continue;
+
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const distSq = dx * dx + dy * dy;
+            const minDist = p1.radius + p2.radius;
+
+            if (distSq > 0 && distSq < minDist * minDist) {
+              const dist = Math.sqrt(distSq);
+              const overlap = minDist - dist;
+              const nx = dx / dist, ny = dy / dist;
+
+              p1.x -= nx * overlap * 0.5;
+              p1.y -= ny * overlap * 0.5;
+              p2.x += nx * overlap * 0.5;
+              p2.y += ny * overlap * 0.5;
+
+              const vrx = p1.vx - p2.vx;
+              const vry = p1.vy - p2.vy;
+              const vDotN = vrx * nx + vry * ny;
+
+              if (vDotN > 0) {
+                p1.vx -= vDotN * nx;
+                p1.vy -= vDotN * ny;
+                p2.vx += vDotN * nx;
+                p2.vy += vDotN * ny;
+
+                p1.clampSpeed(speedMultiplier);
+                p2.clampSpeed(speedMultiplier);
+              }
+
+              p1.enforceMembraneBoundary(t);
+              p2.enforceMembraneBoundary(t);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+function generateOutsideParticles(currentPka) {
+  const newParticles = [];
+  while (newParticles.length < NUM_PARTICLES) {
+    const rx = 25 + Math.random() * (LOGICAL_WIDTH - 50);
+    const ry = 25 + Math.random() * (LOGICAL_HEIGHT - 170);
+
+    const dx = rx - LYSO_CENTER.x;
+    const dy = ry - LYSO_CENTER.y;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const [, rOut] = getMembraneBoundaries(angle, 0.0);
+
+    if (dist > rOut + BUFFER) {
+      newParticles.push(new Particle(rx, ry, currentPka, 0.0));
+    }
+  }
+  return newParticles;
+}
+
+let particles = generateOutsideParticles(pka);
+
+// Coordinate Conversion for Responsive Autoscaling
+function getLogicalCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  return {
+    x: (clientX - rect.left) * (LOGICAL_WIDTH / rect.width),
+    y: (clientY - rect.top) * (LOGICAL_HEIGHT / rect.height)
+  };
+}
+
+// Input Handlers
+function handlePointerDown(e) {
+  const { x: mx, y: my } = getLogicalCoords(e);
+  const btnX = LOGICAL_WIDTH - 140;
+
+  // Pause / Play
+  if (mx >= btnX && mx <= btnX + 110 && my >= 18 && my <= 54) {
+    paused = !paused;
+  }
+  // Reset
+  else if (mx >= btnX && mx <= btnX + 110 && my >= 62 && my <= 98) {
+    particles = generateOutsideParticles(pka);
+    simTime = 0.0;
+    paused = true;
+    ratioSamples = [];
+    lastUpdateTime = 0.0;
+    displayedTrappingRatio = 0.0;
+  }
+  // pKa Slider
+  else if (mx >= 260 && mx <= 500 && my >= LOGICAL_HEIGHT - 95 && my <= LOGICAL_HEIGHT - 65) {
+    draggingPka = true;
+    updatePkaFromMouse(mx);
+  }
+  // Speed Slider
+  else if (mx >= 260 && mx <= 500 && my >= LOGICAL_HEIGHT - 45 && my <= LOGICAL_HEIGHT - 15) {
+    draggingSpeed = true;
+    updateSpeedFromMouse(mx);
+  }
+}
+
+function handlePointerMove(e) {
+  if (!draggingPka && !draggingSpeed) return;
+  const { x: mx } = getLogicalCoords(e);
+
+  if (draggingPka) updatePkaFromMouse(mx);
+  if (draggingSpeed) updateSpeedFromMouse(mx);
+}
+
+function handlePointerUp() {
+  draggingPka = false;
+  draggingSpeed = false;
+}
+
+function updatePkaFromMouse(mx) {
+  const clampedX = Math.max(260, Math.min(mx, 500));
+  pka = parseFloat((5.0 + (clampedX - 260) / 240.0 * 3.0).toFixed(2));
+  for (const p of particles) p.updateState(pka, simTime, true);
+}
+
+function updateSpeedFromMouse(mx) {
+  const clampedX = Math.max(260, Math.min(mx, 500));
+  speedMult = parseFloat((0.2 + (clampedX - 260) / 240.0 * 2.8).toFixed(1));
+}
+
+canvas.addEventListener('mousedown', handlePointerDown);
+window.addEventListener('mousemove', handlePointerMove);
+window.addEventListener('mouseup', handlePointerUp);
+
+canvas.addEventListener('touchstart', (e) => { handlePointerDown(e); e.preventDefault(); }, { passive: false });
+window.addEventListener('touchmove', handlePointerMove, { passive: false });
+window.addEventListener('touchend', handlePointerUp);
+
+// High DPI Scaling
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = LOGICAL_WIDTH * dpr;
+  canvas.height = LOGICAL_HEIGHT * dpr;
+  ctx.resetTransform();
+  ctx.scale(dpr, dpr);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Main Loop
+let lastFrameTime = performance.now();
+
+function animate(now) {
+  const dt = Math.min((now - lastFrameTime) / 1000.0, 0.1);
+  lastFrameTime = now;
+
+  if (!paused) simTime += dt;
+
+  if (!paused) {
+    for (const p of particles) p.move(pka, simTime, speedMult);
+    handleParticleCollisions(particles, simTime, speedMult);
+  }
+
+  // Render Background
+  ctx.fillStyle = COLOR_CYTOSOL;
+  ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+  drawFluidLipidBilayer(ctx, simTime);
+  for (const p of particles) p.draw(ctx);
+
+  // Statistics
+  const insideParticles = particles.filter(p => {
+    const dx = p.x - LYSO_CENTER.x, dy = p.y - LYSO_CENTER.y;
+    const angle = Math.atan2(dy, dx);
+    const [rIn] = getMembraneBoundaries(angle, simTime);
+    return Math.hypot(dx, dy) < rIn;
+  });
+
+  const outsideParticles = particles.filter(p => {
+    const dx = p.x - LYSO_CENTER.x, dy = p.y - LYSO_CENTER.y;
+    const angle = Math.atan2(dy, dx);
+    const [, rOut] = getMembraneBoundaries(angle, simTime);
+    return Math.hypot(dx, dy) > rOut;
+  });
+
+  const nIn = insideParticles.length;
+  const nOut = outsideParticles.length;
+
+  const areaIn = Math.PI * (LYSO_RADIUS ** 2);
+  const areaOut = Math.max(1.0, ((LOGICAL_WIDTH - 30) * (LOGICAL_HEIGHT - 170)) - areaIn);
+  const concIn = (nIn / areaIn) * 10000;
+  const concOut = (nOut / areaOut) * 10000;
+  const instTrappingRatio = concOut > 0 ? concIn / concOut : 0;
+
+  if (!paused) {
+    ratioSamples.push({ t: simTime, r: instTrappingRatio });
+    ratioSamples = ratioSamples.filter(s => simTime - s.t <= 3.0);
+
+    if (simTime - lastUpdateTime >= 1.0 || displayedTrappingRatio === 0.0) {
+      if (ratioSamples.length > 0) {
+        displayedTrappingRatio = ratioSamples.reduce((sum, s) => sum + s.r, 0) / ratioSamples.length;
+      }
+      lastUpdateTime = simTime;
+    }
+  }
+
+  // Titles
+  ctx.fillStyle = "#1E5096";
+  ctx.font = "bold 22px Arial";
+  ctx.fillText("INTRACELLULAR FLUID (pH 7.0)", 25, 38);
+
+  ctx.fillStyle = "#464646";
+  ctx.textAlign = "center";
+  ctx.fillText("LYSOSOME (pH 5.0)", LYSO_CENTER.x, LYSO_CENTER.y + 7);
+  ctx.textAlign = "left";
+
+  // Buttons
+  const btnX = LOGICAL_WIDTH - 140;
+
+  // Play / Pause
+  ctx.fillStyle = paused ? COLOR_PLAY_BG : COLOR_PAUSE_BG;
+  ctx.beginPath(); ctx.roundRect(btnX, 18, 110, 36, 6); ctx.fill();
+  ctx.strokeStyle = "#1E1E1E"; ctx.lineWidth = 2; ctx.stroke();
+
+  ctx.fillStyle = COLOR_BTN_TEXT;
+  ctx.font = "bold 16px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(paused ? "PLAY" : "PAUSE", btnX + 55, 41);
+
+  // Reset
+  ctx.fillStyle = COLOR_RESET_BG;
+  ctx.beginPath(); ctx.roundRect(btnX, 62, 110, 36, 6); ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = COLOR_BTN_TEXT;
+  ctx.fillText("RESET", btnX + 55, 85);
+  ctx.textAlign = "left";
+
+  // Control Panel
+  ctx.fillStyle = COLOR_UI_BG;
+  ctx.fillRect(0, LOGICAL_HEIGHT - 110, LOGICAL_WIDTH, 110);
+  ctx.strokeStyle = "#B4B4B4"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, LOGICAL_HEIGHT - 110); ctx.lineTo(LOGICAL_WIDTH, LOGICAL_HEIGHT - 110); ctx.stroke();
+
+  // Legend
+  ctx.beginPath(); ctx.arc(35, LOGICAL_HEIGHT - 75, 6, 0, Math.PI * 2);
+  ctx.fillStyle = COLOR_NEUTRAL; ctx.fill();
+  ctx.fillStyle = COLOR_TEXT; ctx.font = "15px Arial";
+  ctx.fillText("Neutral Drug (B:)", 50, LOGICAL_HEIGHT - 70);
+
+  ctx.beginPath(); ctx.arc(35, LOGICAL_HEIGHT - 40, 6, 0, Math.PI * 2);
+  ctx.fillStyle = COLOR_IONIZED; ctx.fill();
+  ctx.beginPath(); ctx.arc(39, LOGICAL_HEIGHT - 44, 3, 0, Math.PI * 2);
+  ctx.fillStyle = COLOR_PROTON; ctx.fill();
+  ctx.fillStyle = COLOR_TEXT;
+  ctx.fillText("Ionized Drug (BH+)", 50, LOGICAL_HEIGHT - 35);
+
+  // Sliders
+  ctx.font = "bold 15px Arial";
+  ctx.fillText(`Drug pKa: ${pka.toFixed(2)}`, 260, LOGICAL_HEIGHT - 88);
+  ctx.fillStyle = "#B4B4B4";
+  ctx.fillRect(260, LOGICAL_HEIGHT - 78, 240, 8);
+  const handlePkaX = 260 + ((pka - 5.0) / 3.0) * 240;
+  ctx.beginPath(); ctx.arc(handlePkaX, LOGICAL_HEIGHT - 74, 10, 0, Math.PI * 2);
+  ctx.fillStyle = "#3278DC"; ctx.fill();
+
+  ctx.fillStyle = COLOR_TEXT;
+  ctx.fillText(`Particle Speed: ${speedMult.toFixed(1)}x`, 260, LOGICAL_HEIGHT - 40);
+  ctx.fillStyle = "#B4B4B4";
+  ctx.fillRect(260, LOGICAL_HEIGHT - 30, 240, 8);
+  const handleSpeedX = 260 + ((speedMult - 0.2) / 2.8) * 240;
+  ctx.beginPath(); ctx.arc(handleSpeedX, LOGICAL_HEIGHT - 26, 10, 0, Math.PI * 2);
+  ctx.fillStyle = "#3278DC"; ctx.fill();
+
+  // Equation
+  ctx.fillStyle = COLOR_TEXT;
+  ctx.fillText("Lysosomal Trapping Factor:", 530, LOGICAL_HEIGHT - 88);
+  ctx.font = "14px Arial";
+  ctx.fillText("[Concentration INSIDE]", 530, LOGICAL_HEIGHT - 65);
+  ctx.strokeStyle = COLOR_TEXT; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(530, LOGICAL_HEIGHT - 55); ctx.lineTo(700, LOGICAL_HEIGHT - 55); ctx.stroke();
+  ctx.fillText("[Concentration OUTSIDE]", 530, LOGICAL_HEIGHT - 38);
+
+  const statColor = displayedTrappingRatio > 10 ? "#B41E1E" : "#1E781E";
+  ctx.fillStyle = statColor;
+  ctx.font = "bold 22px Arial";
+  ctx.fillText(`=  ${displayedTrappingRatio.toFixed(1)}x`, 715, LOGICAL_HEIGHT - 50);
+
+  requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>
