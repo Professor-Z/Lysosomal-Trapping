@@ -16,134 +16,444 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Lysosomal Trapping Simulation</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background-color: #1a202c;
+      color: #fff;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
       user-select: none;
       -webkit-user-select: none;
     }
-    body {
-      background-color: #121212;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      font-family: Arial, sans-serif;
-      overflow: hidden;
+
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.75rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
     }
-    #sim-container {
-      position: relative;
-      width: 100%;
-      max-width: 1000px;
-      aspect-ratio: 900 / 650;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      border-radius: 8px;
-      overflow: hidden;
-      background-color: #D7EBF0;
+
+    /* Simulation area: fills the whole window; panels float on top */
+    #sim-wrap { position: fixed; inset: 0; }
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+    /* Single collapsible control window: a bright green tab at the top centre; hovering it slides a full-width bar down */
+    /* the controls drop down from just below the pKa bar; the clip hides the collapsed panel so it never covers the bar */
+    #controls-clip { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; z-index: 20; pointer-events: none; }
+    #controls-wrap { position: absolute; top: 0; left: 0; right: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; pointer-events: none;
+      transform: translateY(calc(-100% + 36px)); transition: transform 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) 1s; }   /* collapses 1 s after the pointer leaves */
+    #controls-wrap:hover, #controls-wrap:focus-within, #controls-wrap.open { transform: translateY(0); transition-delay: 0s; }
+    #controls-wrap > * { pointer-events: auto; }
+    #controls-panel { width: 100%; border-radius: 0; border-width: 0 0 1px 0; padding: 0.7rem 1.25rem; background: #1e293b; }
+    .cp-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.6rem 2rem; }
+    .cp-title h1 { font-size: 1.125rem; line-height: 1.4rem; font-weight: 700; color: #60a5fa; }
+    .cp-title div { font-size: 0.75rem; font-weight: 600; color: #9ca3af; }
+    .cp-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .cp-label { font-size: 0.75rem; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.03em; }
+    .cp-value { font-size: 0.875rem; font-weight: 700; color: #e5e7eb; min-width: 3.2rem; font-variant-numeric: tabular-nums; }
+    #controls-tab { height: 36px; background: #22e55e; color: #04290f; font-weight: 800; font-size: 16px; letter-spacing: 0.2em; padding: 8px 32px 0; border-radius: 0 0 12px 12px;
+      box-shadow: 0 0 14px rgba(34,229,94,0.75), 0 0 30px rgba(34,229,94,0.35); cursor: pointer; user-select: none; }
+
+    /* Range sliders (E2 style) */
+    input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; width: 200px; height: 18px; cursor: pointer; }
+    input[type=range]:focus { outline: none; }
+    input[type=range]::-webkit-slider-runnable-track { height: 4px; background: #4b5563; border-radius: 2px; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #3b82f6; margin-top: -6px; box-shadow: 0 0 6px rgba(59,130,246,0.7); }
+    input[type=range]::-moz-range-track { height: 4px; background: #4b5563; border-radius: 2px; }
+    input[type=range]::-moz-range-thumb { height: 16px; width: 16px; border: none; border-radius: 50%; background: #3b82f6; box-shadow: 0 0 6px rgba(59,130,246,0.7); }
+
+    /* Bottom bar */
+    #bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; pointer-events: none; display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center; gap: 0.6rem; padding: 0.6rem 0.75rem 0.75rem; }
+    #bottom-bar > * { pointer-events: auto; }
+    #bottom-bar > .glass-panel { padding: 0.55rem 0.9rem; display: flex; align-items: center; gap: 0.9rem; }
+
+    /* ---------- TEST YOUR UNDERSTANDING drawer (left edge) ---------- */
+    #quiz-wrap { position: fixed; left: 0; top: 50%; z-index: 30; display: flex; align-items: center;
+      --qw: min(1240px, calc(100vw - 44px));
+      transform: translate(calc(-1 * var(--qw)), -50%); transition: transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1); }
+    #quiz-wrap.open { transform: translate(0, -50%); }
+    #quiz-panel { width: var(--qw); max-height: calc(100vh - 24px); overflow-y: auto; border-radius: 0 0.75rem 0.75rem 0; border-left: none;
+      padding: 1rem 1.15rem 1.2rem; background: rgba(30, 41, 59, 0.97); font-size: 0.86rem; line-height: 1.45; color: #d1d5db; }
+    #quiz-tab { writing-mode: vertical-rl; transform: rotate(180deg); background: #f59e0b; color: #2a1a00; font-weight: 800; font-size: 15px;
+      letter-spacing: 0.16em; padding: 20px 9px; border-radius: 12px 0 0 12px; cursor: pointer; user-select: none; white-space: nowrap;
+      box-shadow: 0 0 14px rgba(245,158,11,0.75), 0 0 30px rgba(245,158,11,0.35); }
+    #quiz-panel h2 { font-size: 1.1rem; font-weight: 700; color: #fbbf24; margin-bottom: 0.4rem; }
+    #quiz-panel h3 { font-size: 0.92rem; font-weight: 700; color: #f3f4f6; margin: 0.9rem 0 0.4rem; }
+    #quiz-panel p { margin-bottom: 0.5rem; }
+    .q-close { float: right; background: none; border: none; color: #9ca3af; font-size: 1.3rem; cursor: pointer; line-height: 1; }
+    .q-close:hover { color: #fff; }
+    .drug { border: 1px solid rgba(255,255,255,0.1); border-radius: 0.6rem; padding: 0.4rem 0.6rem; margin: 0.45rem 0; background: rgba(15,23,42,0.45);
+      transition: box-shadow .2s, border-color .2s, background .2s; }
+    .drug-name { font-weight: 700; color: #f3f4f6; }
+    .drug-name span { font-weight: 400; color: #9ca3af; font-size: 0.78rem; }
+    .rxn { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; margin-top: 0.2rem; }
+    .rxn svg { height: auto; flex: 1 1 0; min-width: 0; }
+    .q-cols { display: grid; grid-template-columns: 1.5fr 1fr; gap: 0 1.1rem; align-items: start; }
+    .q-cols .q-box:first-child { margin-top: 0.2rem; }
+    @media (max-width: 960px) {
+      .q-cols { grid-template-columns: 1fr; }
+      .rxn { flex-wrap: wrap; justify-content: center; }
+      .rxn svg { flex-basis: 100%; }
     }
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      touch-action: none;
+    .pka-tag .pka-val { display: none; }
+    .pka-tag .pka-hidden { color: #9ca3af; }
+    .pka-shown .pka-val { display: inline; }
+    .pka-shown .pka-hidden { display: none; }
+    #pka-note { display: none; }
+    .pka-shown #pka-note { display: block; }
+    .pka-shown #pka-hint { display: none; }
+    .q-box { border: 2px solid #facc15; border-radius: 0.6rem; padding: 0.15rem 0.85rem 0.8rem; margin-top: 0.8rem; background: rgba(250,204,21,0.04); }
+    .q-box.locked { opacity: 0.4; }
+    .mol-acid { border-radius: 0.5rem; background: rgba(59,130,246,0.16); box-shadow: 0 0 0 1px rgba(96,165,250,0.55), 0 0 12px rgba(59,130,246,0.35); }
+    .rxn-mid { display: flex; flex-direction: column; align-items: center; color: #e5e7eb; font-size: 0.8rem; white-space: nowrap; }
+    .rxn-mid .arrows { font-size: 1.3rem; line-height: 1; }
+    .pka-tag { font-weight: 800; color: #93c5fd; white-space: nowrap; font-size: 0.85rem; }
+    .q-opts { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .q-opt { flex: 1 1 0; min-width: 8rem; padding: 0.5rem 0.7rem; border-radius: 0.375rem; border: 1px solid #4b5563; background: #374151; color: #fff;
+      font-weight: 700; font-size: 0.8rem; cursor: pointer; transition: background-color .15s; }
+    .q-opt:hover:not(:disabled) { background: #4b5563; }
+    .q-opt:disabled { cursor: default; opacity: 0.55; }
+    .q-opt.right { background: #15803d; border-color: #22c55e; opacity: 1; }
+    .q-opt.wrong { background: #b91c1c; border-color: #ef4444; opacity: 1; }
+    .feedback { display: none; margin-top: 0.5rem; padding: 0.5rem 0.65rem; border-radius: 0.4rem; border-left: 3px solid; font-size: 0.82rem; }
+    .feedback.ok { display: block; border-color: #22c55e; background: rgba(34,197,94,0.1); }
+    .feedback.no { display: block; border-color: #ef4444; background: rgba(239,68,68,0.1); }
+    .feedback b { color: #fff; }
+    .locked { opacity: 0.4; pointer-events: none; }
+    #test-prompt { display: none; margin-top: 0.7rem; padding: 0.55rem 0.7rem; border-radius: 0.4rem; background: rgba(250,204,21,0.12);
+      border: 1px solid rgba(250,204,21,0.6); color: #fde68a; font-weight: 700; animation: pulseGlow 1.6s ease-in-out infinite; }
+    .drug.clickable { cursor: pointer; }
+    .drug.clickable:hover { background: rgba(51,65,85,0.6); }
+    .drug.chosen { border-color: #fde047; background: rgba(250,204,21,0.10); animation: radiant 1.6s ease-in-out infinite; }
+    @keyframes radiant { 0%,100% { box-shadow: 0 0 10px 2px rgba(250,204,21,0.55), 0 0 26px 6px rgba(250,204,21,0.25), inset 0 0 14px rgba(250,204,21,0.15); }
+      50% { box-shadow: 0 0 18px 5px rgba(253,224,71,0.95), 0 0 48px 14px rgba(250,204,21,0.5), inset 0 0 24px rgba(250,204,21,0.3); } }
+    @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 4px rgba(250,204,21,0.35); } 50% { box-shadow: 0 0 16px rgba(250,204,21,0.8); } }
+    #q-restart { margin-top: 0.8rem; background: none; border: 1px solid #4b5563; color: #9ca3af; border-radius: 0.375rem; padding: 0.3rem 0.7rem;
+      font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+    #q-restart:hover { color: #fff; border-color: #9ca3af; }
+    /* ---------- INSTRUCTIONS drawer (right edge) ---------- */
+    #instr-wrap { position: fixed; right: 0; top: 50%; z-index: 30; display: flex; align-items: center; flex-direction: row-reverse;
+      --iw: min(900px, calc(100vw - 44px));
+      transform: translate(var(--iw), -50%); transition: transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1); }
+    #instr-wrap.open { transform: translate(0, -50%); }
+    #quiz-wrap, #instr-wrap { transition: transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.3s; }
+    body.quiz-open #instr-wrap { opacity: 0; pointer-events: none; }
+    #instr-panel { width: var(--iw); max-height: calc(100vh - 24px); overflow-y: auto; border-radius: 0.75rem 0 0 0.75rem; border-right: none;
+      padding: 1rem 1.15rem 1.2rem; background: rgba(30, 41, 59, 0.97); font-size: 0.86rem; line-height: 1.45; color: #d1d5db; }
+    #instr-tab { writing-mode: vertical-rl; transform: rotate(180deg); background: #9ca3af; color: #111827; font-weight: 800; font-size: 15px;
+      letter-spacing: 0.16em; padding: 20px 9px; border-radius: 0 12px 12px 0; cursor: pointer; user-select: none; white-space: nowrap;
+      box-shadow: 0 0 14px rgba(156,163,175,0.7), 0 0 30px rgba(156,163,175,0.3); }
+    #instr-panel h2 { font-size: 1.1rem; font-weight: 700; color: #e5e7eb; margin-bottom: 0.4rem; }
+    #instr-panel h3 { font-size: 0.92rem; font-weight: 700; color: #f3f4f6; margin: 0.9rem 0 0.35rem; }
+    #instr-panel p { margin-bottom: 0.5rem; }
+    #instr-panel ul { margin: 0 0 0.5rem 1.1rem; }
+    #instr-panel li { margin-bottom: 0.3rem; }
+    #instr-panel b { color: #fff; }
+    #instr-panel .cb, #quiz-panel .cb, #bottom-bar .cb, .cb { color: #f87171; } #instr-panel .cbh, #quiz-panel .cbh, #bottom-bar .cbh, .cbh { color: #93c5fd; }
+    .i-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.4rem; }
+    @media (max-width: 820px) { .i-cols { grid-template-columns: 1fr; } }
+    .hh-eq { text-align: center; font-size: 1rem; color: #fff; margin: 0.3rem 0 0.45rem; font-family: "Cambria Math", "Times New Roman", serif; }
+    .hh-eq .fr { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; font-size: 0.9rem; }
+    .hh-eq .fr span:first-child { border-bottom: 1px solid #fff; }
+    .hh-row { position: fixed; top: var(--hhtop, 140px); left: 0; right: 0; z-index: 11; display: flex; justify-content: center; pointer-events: none; padding: 0 3rem; }
+    .hh-live { border-radius: 0.6rem; padding: 0.5rem 1.2rem; font-size: 1.1rem; color: #f3f4f6; text-align: center; }
+    #hh-bar { background: #1e293b; border: 1.5px solid #facc15; box-shadow: 0 0 10px rgba(250,204,21,0.6), 0 0 24px rgba(250,204,21,0.3); }
+    .hh-live b { color: #fff; } .hh-live b.cbh { color: #93c5fd; } .legend-item .cb, .legend-item .cbh { font-weight: 700; }
+    .hh-live b { font-variant-numeric: tabular-nums; }
+    .chip { display: inline-block; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; padding: 0 0.4rem; border-radius: 0.3rem; }
+    .chip.green { background: #22e55e; color: #04290f; } .chip.amber { background: #f59e0b; color: #2a1a00; }
+    #toast { position: fixed; top: var(--toasttop, 200px); left: 50%; transform: translateX(-50%); z-index: 15; padding: 0.5rem 1rem; font-weight: 700; color: #fde68a;
+      opacity: 0; transition: opacity 0.5s; pointer-events: none; white-space: nowrap; font-size: 0.9rem; }
+    #toast.show { opacity: 1; }
+    .legend-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: #d1d5db; white-space: nowrap; }
+    .ball { position: relative; width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto; box-shadow: 1px 2px 3px rgba(0,0,0,0.5); }
+    .ball.neutral { background: radial-gradient(circle at 32% 30%, #fde2e2 0%, #f87171 22%, #ef4444 50%, #7f1d1d 100%); }
+    .ball.ionized { background: radial-gradient(circle at 32% 30%, #dbeafe 0%, #60a5fa 22%, #3b82f6 50%, #1e3a8a 100%); }
+    .ball.ionized::after { content: ""; position: absolute; width: 7px; height: 7px; right: -2px; top: -2px; border-radius: 50%;
+      background: radial-gradient(circle at 32% 30%, #ffffff 0%, #e2e8f0 45%, #64748b 100%); box-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+
+    .btn { padding: 0.45rem 0.9rem; border-radius: 0.375rem; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; color: #fff; border: none; cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,.4); transition: background-color .15s; white-space: nowrap; min-width: 5.5rem; }
+    .btn-play { background: #16a34a; } .btn-play:hover { background: #22c55e; }
+    .btn-pause { background: #dc2626; } .btn-pause:hover { background: #ef4444; }
+    .btn-reset { background: #4b5563; } .btn-reset:hover { background: #6b7280; }
+
+    #factor-panel { font-size: 0.85rem; color: #d1d5db; }
+    .frac { display: inline-flex; flex-direction: column; align-items: center; font-size: 0.78rem; line-height: 1.15rem; }
+    .frac span:first-child { border-bottom: 2px solid #d1d5db; padding: 0 0.25rem; }
+    .frac span:last-child { padding: 0 0.25rem; }
+    #factor-label { font-weight: 700; color: #e5e7eb; }
+    #factor-value { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 4.5rem; transition: color 1s linear; }
+
+    #open-info-modal { background: rgba(30,41,59,0.8); border: 1px solid rgba(255,255,255,0.15); color: #d1d5db; padding: 0.4rem 0.8rem; border-radius: 0.5rem;
+      font-size: 0.75rem; font-weight: 700; cursor: pointer; align-self: center; }
+    #open-info-modal:hover { background: rgba(51,65,85,0.9); color: #fff; }
+
+    /* Info modal */
+    #info-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; justify-content: center; align-items: center; padding: 20px; }
+    #info-modal .glass-panel { max-width: 500px; width: 100%; overflow: hidden; display: flex; flex-direction: column; background: rgba(30,41,59,0.95); }
+    .modal-head { background: #1e40af; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+    .modal-head button { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; font-weight: 700; }
+    .modal-body { padding: 20px; font-size: 14px; line-height: 1.5; display: flex; flex-direction: column; gap: 12px; color: #d1d5db; }
+    .modal-body strong { color: #fff; }
+    .modal-body .lic { background: rgba(15,23,42,0.7); padding: 10px 12px; border-radius: 6px; font-size: 13px; }
+    .modal-body a { color: #60a5fa; font-weight: 700; text-decoration: none; }
+    .modal-foot { padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: flex-end; }
+    .modal-foot button { background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 13px; }
+    .modal-foot button:hover { background: #3b82f6; }
+
+
+    /* larger, easier-to-read bottom panels */
+    #bottom-bar > .glass-panel { padding: 0.65rem 1.1rem; gap: 1.1rem; }
+    .legend-item { font-size: 1.05rem; color: #f3f4f6; gap: 0.55rem; }
+    .ball { width: 20px; height: 20px; }
+    .ball.ionized::after { width: 9px; height: 9px; }
+    #bottom-bar .btn { font-size: 1rem; padding: 0.55rem 1.1rem; min-width: 6.5rem; }
+    #factor-panel { font-size: 1rem; color: #f3f4f6; }
+    #factor-label { font-size: 1.05rem; }
+    .frac { font-size: 0.92rem; line-height: 1.35rem; }
+    .frac span:first-child { border-bottom-color: #f3f4f6; }
+    #factor-value { font-size: 1.75rem; min-width: 5.5rem; }
+    #open-info-modal { font-size: 0.78rem; padding: 0.3rem 0.75rem; color: #e5e7eb; position: fixed; bottom: 6px; right: 10px; z-index: 12; }
+    #bottom-bar { padding-bottom: 2.4rem; }
+    #toast { font-size: 1.05rem; }
+    @media (max-width: 640px) {
+      input[type=range] { width: 150px; }
+      #bottom-bar > .glass-panel { padding: 0.45rem 0.7rem; }
     }
   </style>
 </head>
 <body>
 
-<div id="sim-container">
+<!-- Collapsible control window -->
+<div id="controls-clip"><div id="controls-wrap">
+  <div id="controls-panel" class="glass-panel">
+    <div class="cp-row">
+      <div class="cp-title">
+        <h1>Lysosomal Trapping</h1>
+        <div>Ion Trapping of Weak Bases</div>
+      </div>
+      <div class="cp-group">
+        <span class="cp-label">Drug pK<sub>a</sub>:</span>
+        <input type="range" id="pka-slider" min="5" max="8" step="0.01" value="8">
+        <span id="pka-value" class="cp-value">8.00</span>
+      </div>
+      <div class="cp-group">
+        <span class="cp-label">Particle Speed:</span>
+        <input type="range" id="speed-slider" min="0.2" max="5.0" step="0.1" value="2.0">
+        <span id="speed-value" class="cp-value">2.0x</span>
+      </div>
+      <div class="cp-group">
+        <span class="cp-label">Particles:</span>
+        <input type="range" id="count-slider" min="50" max="1000" step="10" value="300">
+        <span id="count-value" class="cp-value">300</span>
+      </div>
+    </div>
+  </div>
+  <div id="controls-tab">CONTROLS</div>
+</div></div>
+
+<!-- TEST YOUR UNDERSTANDING drawer: tab on the left edge -->
+<div id="quiz-wrap">
+  <div id="quiz-panel" class="glass-panel">
+    <button class="q-close" id="q-close" title="Close">&times;</button>
+    <h2>Test Your Understanding</h2>
+    <div class="q-cols"><div>
+    <p>Medicinal chemists often place fluorine near a basic amine to tune its pK<sub>a</sub>. Genentech chemists did exactly this with two closely related Met kinase inhibitor drug candidates (anticancer agents). They differ by one fluorine next to the basic piperidine nitrogen:</p>
+
+    <div class="drug" id="drug-A" data-drug="A">
+      <div class="drug-name">GEN-203 <span>(one fluorine near the amine)</span></div>
+      <div class="rxn">
+        <span class="mol-slot" data-nf="1" data-acid="0"></span>
+        <div class="rxn-mid"><span>+ H⁺</span><span class="arrows">⇌</span></div>
+        <span class="mol-slot" data-nf="1" data-acid="1"></span>
+        <span class="pka-tag">pK<sub>a</sub> <span class="pka-hidden">= ?</span><span class="pka-val">≈ 7.5</span></span>
+      </div>
+    </div>
+
+    <div class="drug" id="drug-B" data-drug="B">
+      <div class="drug-name">GEN-890 <span>(two fluorines near the amine)</span></div>
+      <div class="rxn">
+        <span class="mol-slot" data-nf="2" data-acid="0"></span>
+        <div class="rxn-mid"><span>+ H⁺</span><span class="arrows">⇌</span></div>
+        <span class="mol-slot" data-nf="2" data-acid="1"></span>
+        <span class="pka-tag">pK<sub>a</sub> <span class="pka-hidden">= ?</span><span class="pka-val">≈ 5.5</span></span>
+      </div>
+    </div>
+    <p style="font-size:0.75rem;color:#9ca3af">Neutral amines (<b class="cb">B:</b>) are shown in red; conjugate acids (<b class="cbh">BH⁺</b>), protonated on the piperidine nitrogen, are highlighted in blue.<span id="pka-hint"> The pK<sub>a</sub> values are revealed after Question 1.</span></p>
+    <p id="pka-note" style="font-size:0.75rem;color:#9ca3af">Structures: Charifson, P. S.; Walters, W. P. <i>J. Med. Chem.</i> <b>2014</b>, 57, 9701–9717 (Figure 11A).</p>
+
+    </div><div>
+    <div id="q1" class="q-box">
+      <h3>Question 1</h3>
+      <p>Which drug is the <b>weaker base</b>? In other words, which one has a lone pair that is less available to accept H⁺ and form <b class="cbh">BH⁺</b>?</p>
+      <div class="q-opts">
+        <button class="q-opt" data-q="1" data-a="A">GEN-203 (one fluorine)</button>
+        <button class="q-opt" data-q="1" data-a="B">GEN-890 (two fluorines)</button>
+      </div>
+      <div class="feedback" id="fb1"></div>
+    </div>
+
+    <div id="q2" class="q-box locked">
+      <h3>Question 2</h3>
+      <p>Which drug is more likely to <b>accumulate (become trapped) inside the lysosome</b>?</p>
+      <div class="q-opts">
+        <button class="q-opt" data-q="2" data-a="A">GEN-203 (one fluorine)</button>
+        <button class="q-opt" data-q="2" data-a="B">GEN-890 (two fluorines)</button>
+      </div>
+      <div class="feedback" id="fb2"></div>
+      <div id="test-prompt"></div>
+    </div>
+    <button id="q-restart">↺ Start over</button>
+    </div></div>
+  </div>
+  <div id="quiz-tab">TEST YOUR UNDERSTANDING</div>
+</div>
+
+<!-- INSTRUCTIONS drawer: tab on the right edge -->
+<div id="instr-wrap">
+  <div id="instr-panel" class="glass-panel">
+    <button class="q-close" id="i-close" title="Close">&times;</button>
+    <h2>Instructions</h2>
+    <div class="i-cols">
+      <div>
+        <h3>Lysosomal trapping</h3>
+        <p>Lysosomes are acidic (pH ≈ 5) compared with the cytosol (pH ≈ 7). A neutral amine drug (<b class="cb">B:</b>, red) can cross the membrane, but inside it picks up a proton. The conjugate acid <b class="cbh">BH⁺</b> (blue with a white proton) cannot cross over the lipid bilayer, and so the drug builds up in the lysosome. This is lysosomal trapping and the degree to which it happens depends on the basicity of the drug.</p>
+        <h3>Henderson–Hasselbalch equation</h3>
+        <div class="hh-eq">pH = pK<sub>a</sub> + log <span class="fr"><span>[<span class="cb">B:</span>]</span><span>[<span class="cbh">BH⁺</span>]</span></span></div>
+        <p>When pH &lt; pK<sub>a</sub>, most of the drug is <b class="cbh">BH⁺</b>; when pH &gt; pK<sub>a</sub>, most is <b class="cb">B:</b>. The simulation uses this equation to decide, moment to moment, whether each molecule is <b class="cb">B:</b> or <b class="cbh">BH⁺</b> based on the pH of the compartment it is in. Because the lysosome is more acidic, a larger fraction of the drug exists in the ionized state <b class="cbh">BH⁺</b> when inside the lysosome.</p>
+      </div>
+      <div>
+        <h3>How to use the simulation</h3>
+        <ul>
+          <li>Hover over (or tap) the <span class="chip green">CONTROLS</span> tab at the top to set the drug's <b>pK<sub>a</sub></b>, the <b>particle speed</b>, and the <b>number of particles</b>.</li>
+          <li><b>PLAY</b> starts or pauses the simulation; <b>RESET</b> moves every molecule back into the cytosol.</li>
+          <li>The <b>Lysosomal Trapping Factor</b> compares the drug concentration inside the lysosome with that outside.</li>
+        </ul>
+        <h3>Explore</h3>
+        <ul>
+          <li>Run the simulation at pK<sub>a</sub> ≈ 5, then ≈ 8. Which drug is trapped more, and why?</li>
+          <li>Then open the <span class="chip amber">TEST YOUR UNDERSTANDING</span> tab on the left to compare two real drug candidates and test your prediction.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div id="instr-tab">INSTRUCTIONS</div>
+</div>
+
+<div id="toast" class="glass-panel"></div>
+
+<div id="sim-wrap">
   <canvas id="simCanvas"></canvas>
-  <button id="open-info-modal" style="position: absolute; bottom: 8px; right: 8px; z-index: 20; background: rgba(255,255,255,0.85); border: 1px solid #b4b4b4; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; color: #333; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">ℹ️ About / Copyright</button>
+</div>
+
+<div class="hh-row" id="hh-top"><div id="hh-bar" class="glass-panel hh-live">At the current pK<sub>a</sub> of <b id="hh-pka">8.00</b>: <b id="hh-out">91%</b> <b class="cbh">BH⁺</b> in the cytosol (pH 7), <b id="hh-in">99.9%</b> <b class="cbh">BH⁺</b> in the lysosome (pH 5).</div></div>
+
+<div id="bottom-bar">
+  <div class="glass-panel">
+    <div class="legend-item"><span class="ball neutral"></span><span>Neutral Drug (<b class="cb">B:</b>)</span></div>
+    <div class="legend-item"><span class="ball ionized"></span><span>Ionized Drug (<b class="cbh">BH⁺</b>)</span></div>
+  </div>
+  <div class="glass-panel">
+    <button id="btn-play" class="btn btn-play">PLAY</button>
+    <button id="btn-reset" class="btn btn-reset">RESET</button>
+  </div>
+  <div id="factor-panel" class="glass-panel">
+    <span id="factor-label">Lysosomal Trapping Factor:</span>
+    <span class="frac"><span>[Concentration INSIDE]</span><span>[Concentration OUTSIDE]</span></span>
+    <span id="factor-value" style="color:#4ade80">= 0.0x</span>
+  </div>
+  <button id="open-info-modal">ℹ️ About / Copyright</button>
 </div>
 
 <!-- Info / Copyright Modal Overlay -->
-<div id="info-modal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; justify-content: center; align-items: center; padding: 20px; font-family: Arial, sans-serif;">
-  <div style="background: #ffffff; color: #141414; border-radius: 8px; max-width: 500px; width: 100%; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); display: flex; flex-direction: column;">
-    <div style="background: #1E5096; color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;">
-      <span style="font-weight: bold; font-size: 16px;">About & Copyright Information</span>
-      <button id="close-info-modal" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; font-weight: bold;">&times;</button>
+<div id="info-modal">
+  <div class="glass-panel">
+    <div class="modal-head">
+      <span>About &amp; Copyright Information</span>
+      <button id="close-info-modal">&times;</button>
     </div>
-    <div style="padding: 20px; font-size: 14px; line-height: 1.5; display: flex; flex-direction: column; gap: 12px;">
+    <div class="modal-body">
       <div>
         <strong>Lysosomal Trapping Simulation</strong><br>
         Created by <strong>Zerubba Levi</strong> for chemistry and pharmacology education.
       </div>
-      <div style="background: #f0f0f0; padding: 10px 12px; border-radius: 6px; font-size: 13px;">
+      <div class="lic">
         <strong>License:</strong> Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)<br>
         Other professors and educators are free to use, share, and adapt this simulation for non-commercial educational purposes, provided full attribution is given and modified versions share this same license.
       </div>
       <div>
-        <strong>Feedback & Revisions:</strong><br>
-        Found a bug or have a suggestion for improving this simulation? Reach out with suggested revisions and feedback at <a href="mailto:zelevi@cabrillo.edu" style="color: #2864DC; font-weight: bold; text-decoration: none;">zelevi@cabrillo.edu</a>.
+        <strong>Feedback &amp; Revisions:</strong><br>
+        Found a bug or have a suggestion for improving this simulation? Reach out with suggested revisions and feedback at <a href="mailto:zelevi@cabrillo.edu">zelevi@cabrillo.edu</a>.
       </div>
     </div>
-    <div style="background: #f9f9f9; padding: 12px 20px; border-top: 1px solid #e0e0e0; display: flex; justify-content: flex-end;">
-      <button id="modal-ok-btn" style="background: #1E5096; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px;">Close</button>
+    <div class="modal-foot">
+      <button id="modal-ok-btn">Close</button>
     </div>
   </div>
 </div>
 
 <script>
-// Modal Logic
+// ---------- Modal Logic ----------
 const infoModal = document.getElementById('info-modal');
-const openInfoModalBtn = document.getElementById('open-info-modal');
-const closeInfoModalBtn = document.getElementById('close-info-modal');
-const modalOkBtn = document.getElementById('modal-ok-btn');
+document.getElementById('open-info-modal').addEventListener('click', () => { infoModal.style.display = 'flex'; });
+document.getElementById('close-info-modal').addEventListener('click', () => { infoModal.style.display = 'none'; });
+document.getElementById('modal-ok-btn').addEventListener('click', () => { infoModal.style.display = 'none'; });
+infoModal.addEventListener('click', (e) => { if (e.target === infoModal) infoModal.style.display = 'none'; });
 
-openInfoModalBtn.addEventListener('click', () => { infoModal.style.display = 'flex'; });
-closeInfoModalBtn.addEventListener('click', () => { infoModal.style.display = 'none'; });
-modalOkBtn.addEventListener('click', () => { infoModal.style.display = 'none'; });
-infoModal.addEventListener('click', (e) => {
-  if (e.target === infoModal) infoModal.style.display = 'none';
+// ---------- Controls tab: hover opens it; on touch screens a tap toggles it ----------
+const controlsWrap = document.getElementById('controls-wrap');
+document.getElementById('controls-tab').addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'mouse') controlsWrap.classList.toggle('open');
+});
+document.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'mouse' && !controlsWrap.contains(e.target)) controlsWrap.classList.remove('open');
 });
 
 const canvas = document.getElementById('simCanvas');
 const ctx = canvas.getContext('2d');
+const simWrap = document.getElementById('sim-wrap');
 
-// Logical Internal Dimensions
-const LOGICAL_WIDTH = 900;
-const LOGICAL_HEIGHT = 650;
+// ---------- World (logical simulation space) ----------
+// The 900 x 540 core always fits on screen; the world then stretches to fill the whole window
+const CORE_W = 900;
+const CORE_H = 558;   // lysosome (membrane included) + small gaps + the label beneath it
+let WORLD_W = CORE_W;
+let WORLD_H = CORE_H;
+let LABEL_Y = CORE_H - 14;
 
 // Simulation Parameters
 const PH_CYTOSOL = 7.0;
 const PH_LYSOSOME = 5.0;
-let LYSO_CENTER = { x: LOGICAL_WIDTH / 2, y: (LOGICAL_HEIGHT - 110) / 2 };
-const LYSO_RADIUS = 160;
+const LYSO_CENTER = { x: CORE_W / 2, y: CORE_H / 2 };
+const LYSO_RADIUS = 192;   // 1.5 x 0.8 = 1.2 x the original 160
 const HALF_THICKNESS = 12;
 const BUFFER = 10;
-const N_LIPIDS = 135;
-const NUM_PARTICLES = 300;
+const N_LIPIDS = 160;   // scaled with the radius so the bilayer stays tightly packed
+let numParticles = 300;   // set from the window size at start-up (same density as the original 300-particle box), then by the slider
 const PARTICLE_RADIUS = 5;
 
 const MEMBRANE_SPEED_FACTOR = 0.25;
 const VELOCITY_SIGMA = 1.0;
 const MAX_SPEED_BASE = 3.0;
 
-// Colors
-const COLOR_CYTOSOL = "#D7EBF0";
-const COLOR_LYSOSOME = "#D2D2D2";
-const COLOR_NEUTRAL = "#DC3232";
-const COLOR_IONIZED = "#2864DC";
-const COLOR_PROTON = "#FFFFFF";
-const COLOR_TEXT = "#141414";
-const COLOR_UI_BG = "#F0F0F0";
+// Colors (dark theme, matching the E2 simulation)
+const COLOR_NEUTRAL = "#ef4444";
+const COLOR_IONIZED = "#3b82f6";
+const COLOR_PROTON = "#e2e8f0";
+const COLOR_HEAD = "#cbd5e1";
+const TAIL_COLOR = "rgba(148, 163, 184, 0.75)";
 
-const COLOR_PAUSE_BG = "#DC3C3C";
-const COLOR_PLAY_BG = "#28A046";
-const COLOR_RESET_BG = "#5A6E82";
-const COLOR_BTN_TEXT = "#FFFFFF";
-
-const HEAD_COLOR = "#464646";
-const HEAD_OUTLINE = "#141414";
-const TAIL_COLOR = "#787878";
+// Light source: upper left, slightly toward the viewer
+const LIGHT = { x: -0.55, y: -0.65 };
 
 // Global UI State
 let pka = 8.00;
-let speedMult = 1.0;
+let speedMult = 2.0;
 let paused = true;
-let draggingPka = false;
-let draggingSpeed = false;
 let simTime = 0.0;
 
 // Rolling Window Variables
@@ -151,13 +461,12 @@ let ratioSamples = [];
 let lastUpdateTime = 0.0;
 let displayedTrappingRatio = 0.0;
 
-// Helper: Henderson-Hasselbalch Equation
+// ---------- Helpers ----------
 function calcFIonized(pKaVal, phVal) {
   const ratio = Math.pow(10, pKaVal - phVal);
   return ratio / (1.0 + ratio);
 }
 
-// Helper: Normal Gaussian Random
 function randomGauss(mean = 0, stdev = 1) {
   const u = 1 - Math.random();
   const v = Math.random();
@@ -165,7 +474,77 @@ function randomGauss(mean = 0, stdev = 1) {
   return z * stdev + mean;
 }
 
-// Helper: Wavy Membrane Boundaries
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function mix(rgb, target, t) {
+  return `rgb(${rgb.map((c, i) => Math.round(c + (target[i] - c) * t)).join(',')})`;
+}
+
+// Pre-rendered shaded sphere sprite (lit from the upper left)
+const SPRITE_PX = 64;
+function makeSphereSprite(hex) {
+  const c = document.createElement('canvas');
+  c.width = c.height = SPRITE_PX;
+  const g = c.getContext('2d');
+  const R = SPRITE_PX / 2;
+  const rgb = hexToRgb(hex);
+  const white = [255, 255, 255], black = [0, 0, 0];
+
+  // Body: diffuse shading with a highlight toward the light
+  const hx = R + LIGHT.x * R * 0.55, hy = R + LIGHT.y * R * 0.55;
+  const body = g.createRadialGradient(hx, hy, R * 0.02, R + LIGHT.x * R * 0.15, R + LIGHT.y * R * 0.15, R * 1.05);
+  body.addColorStop(0.00, mix(rgb, white, 0.85));
+  body.addColorStop(0.18, mix(rgb, white, 0.35));
+  body.addColorStop(0.50, mix(rgb, white, 0.0));
+  body.addColorStop(0.85, mix(rgb, black, 0.45));
+  body.addColorStop(1.00, mix(rgb, black, 0.65));
+  g.beginPath(); g.arc(R, R, R - 0.5, 0, Math.PI * 2);
+  g.fillStyle = body; g.fill();
+
+  // Faint reflected light on the shadowed rim
+  const rim = g.createRadialGradient(R - LIGHT.x * R * 0.7, R - LIGHT.y * R * 0.7, 0, R - LIGHT.x * R * 0.7, R - LIGHT.y * R * 0.7, R * 0.6);
+  rim.addColorStop(0, `rgba(${rgb.join(',')},0.35)`);
+  rim.addColorStop(1, `rgba(${rgb.join(',')},0)`);
+  g.save(); g.beginPath(); g.arc(R, R, R - 0.5, 0, Math.PI * 2); g.clip();
+  g.fillStyle = rim; g.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
+
+  // Small specular glint
+  const sp = g.createRadialGradient(hx, hy, 0, hx, hy, R * 0.28);
+  sp.addColorStop(0, 'rgba(255,255,255,0.9)');
+  sp.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = sp; g.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
+  g.restore();
+  return c;
+}
+
+// Soft cast shadow (falls down and to the right, away from the light)
+function makeShadowSprite() {
+  const c = document.createElement('canvas');
+  c.width = c.height = SPRITE_PX;
+  const g = c.getContext('2d');
+  const R = SPRITE_PX / 2;
+  const sh = g.createRadialGradient(R, R, 0, R, R, R);
+  sh.addColorStop(0, 'rgba(0,0,0,0.45)');
+  sh.addColorStop(0.55, 'rgba(0,0,0,0.25)');
+  sh.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = sh; g.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
+  return c;
+}
+
+const SPRITE_NEUTRAL = makeSphereSprite(COLOR_NEUTRAL);
+const SPRITE_IONIZED = makeSphereSprite(COLOR_IONIZED);
+const SPRITE_PROTON = makeSphereSprite(COLOR_PROTON);
+const SPRITE_HEAD = makeSphereSprite(COLOR_HEAD);
+const SPRITE_SHADOW = makeShadowSprite();
+const SHADOW_OFF = { x: -LIGHT.x * 2.2, y: -LIGHT.y * 2.2 };
+
+function drawSprite(sprite, x, y, r) {
+  ctx.drawImage(sprite, x - r, y - r, r * 2, r * 2);
+}
+
+// ---------- Wavy Membrane Boundaries ----------
 function getLysoRadiusAt(angle, t) {
   const wave = 4.0 * Math.sin(5 * angle + t * 1.8) + 2.5 * Math.sin(9 * angle - t * 2.3);
   return LYSO_RADIUS + wave;
@@ -176,8 +555,8 @@ function getMembraneBoundaries(angle, t) {
   return [rMid - HALF_THICKNESS, rMid + HALF_THICKNESS];
 }
 
-// Draw Wiggly Lipid Tails
-function drawWigglyTail(ctx, startX, startY, endX, endY, tx, ty, phase) {
+// ---------- Lipid bilayer ----------
+function drawWigglyTail(startX, startY, endX, endY, tx, ty, phase) {
   ctx.beginPath();
   const steps = 4;
   for (let k = 0; k <= steps; k++) {
@@ -191,28 +570,58 @@ function drawWigglyTail(ctx, startX, startY, endX, endY, tx, ty, phase) {
     if (k === 0) ctx.moveTo(px, py);
     else ctx.lineTo(px, py);
   }
-  ctx.strokeStyle = TAIL_COLOR;
-  ctx.lineWidth = 2;
   ctx.stroke();
 }
 
-// Render Lipid Bilayer
-function drawFluidLipidBilayer(ctx, t) {
-  // Inner Lysosome Fill
+function lysoPath(t, which) {
   ctx.beginPath();
   for (let i = 0; i < N_LIPIDS; i++) {
     const angle = (2 * Math.PI / N_LIPIDS) * i;
-    const [rIn] = getMembraneBoundaries(angle, t);
-    const px = LYSO_CENTER.x + Math.cos(angle) * rIn;
-    const py = LYSO_CENTER.y + Math.sin(angle) * rIn;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
+    const b = getMembraneBoundaries(angle, t);
+    const r = which === 'in' ? b[0] : b[1];
+    const px = LYSO_CENTER.x + Math.cos(angle) * r;
+    const py = LYSO_CENTER.y + Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
   }
   ctx.closePath();
-  ctx.fillStyle = COLOR_LYSOSOME;
+}
+
+function drawFluidLipidBilayer(t) {
+  // Lysosome lumen, shaded like a lit vesicle
+  lysoPath(t, 'in');
+  const lum = ctx.createRadialGradient(
+    LYSO_CENTER.x + LIGHT.x * 70, LYSO_CENTER.y + LIGHT.y * 70, 10,
+    LYSO_CENTER.x, LYSO_CENTER.y, LYSO_RADIUS);
+  lum.addColorStop(0, '#4a4463');
+  lum.addColorStop(0.7, '#36314b');
+  lum.addColorStop(1, '#27233a');
+  ctx.fillStyle = lum;
   ctx.fill();
 
-  // Draw Lipids
+  // Hydrophobic core band
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i <= N_LIPIDS; i++) {
+    const angle = (2 * Math.PI / N_LIPIDS) * i;
+    const [, rOut] = getMembraneBoundaries(angle, t);
+    const px = LYSO_CENTER.x + Math.cos(angle) * rOut, py = LYSO_CENTER.y + Math.sin(angle) * rOut;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  for (let i = N_LIPIDS; i >= 0; i--) {
+    const angle = (2 * Math.PI / N_LIPIDS) * i;
+    const [rIn] = getMembraneBoundaries(angle, t);
+    ctx.lineTo(LYSO_CENTER.x + Math.cos(angle) * rIn, LYSO_CENTER.y + Math.sin(angle) * rIn);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
+  ctx.fill();
+  ctx.restore();
+
+  // Tails
+  ctx.strokeStyle = TAIL_COLOR;
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+  const heads = [];
   for (let i = 0; i < N_LIPIDS; i++) {
     const angle = (2 * Math.PI / N_LIPIDS) * i;
     const nx = Math.cos(angle), ny = Math.sin(angle);
@@ -224,39 +633,22 @@ function drawFluidLipidBilayer(ctx, t) {
     const ohx = LYSO_CENTER.x + nx * rOut, ohy = LYSO_CENTER.y + ny * rOut;
     const ihx = LYSO_CENTER.x + nx * rIn, ihy = LYSO_CENTER.y + ny * rIn;
     const mx = LYSO_CENTER.x + nx * rMid, my = LYSO_CENTER.y + ny * rMid;
+    const to = 1.8;
 
-    const tailOffset = 1.8;
+    drawWigglyTail(ohx - nx*3 + tx*to, ohy - ny*3 + ty*to, mx + tx*to, my + ty*to, tx, ty, i * 0.7 + t * 4.0);
+    drawWigglyTail(ohx - nx*3 - tx*to, ohy - ny*3 - ty*to, mx - tx*to, my - ty*to, tx, ty, i * 0.7 + 1.8 + t * 4.0);
+    drawWigglyTail(ihx + nx*3 + tx*to, ihy + ny*3 + ty*to, mx + tx*to, my + ty*to, tx, ty, i * 0.7 + 3.1 + t * 4.0);
+    drawWigglyTail(ihx + nx*3 - tx*to, ihy + ny*3 - ty*to, mx - tx*to, my - ty*to, tx, ty, i * 0.7 + 4.5 + t * 4.0);
 
-    // Outer Leaflet Tails
-    drawWigglyTail(ctx, ohx - nx*3 + tx*tailOffset, ohy - ny*3 + ty*tailOffset, mx + tx*tailOffset, my + ty*tailOffset, tx, ty, i * 0.7 + t * 4.0);
-    drawWigglyTail(ctx, ohx - nx*3 - tx*tailOffset, ohy - ny*3 - ty*tailOffset, mx - tx*tailOffset, my - ty*tailOffset, tx, ty, i * 0.7 + 1.8 + t * 4.0);
-
-    // Inner Leaflet Tails
-    drawWigglyTail(ctx, ihx + nx*3 + tx*tailOffset, ihy + ny*3 + ty*tailOffset, mx + tx*tailOffset, my + ty*tailOffset, tx, ty, i * 0.7 + 3.1 + t * 4.0);
-    drawWigglyTail(ctx, ihx + nx*3 - tx*tailOffset, ihy + ny*3 - ty*tailOffset, mx - tx*tailOffset, my - ty*tailOffset, tx, ty, i * 0.7 + 4.5 + t * 4.0);
-
-    // Polar Head Groups
-    ctx.beginPath();
-    ctx.arc(ohx, ohy, 5, 0, Math.PI * 2);
-    ctx.fillStyle = HEAD_OUTLINE;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(ohx, ohy, 4, 0, Math.PI * 2);
-    ctx.fillStyle = HEAD_COLOR;
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(ihx, ihy, 5, 0, Math.PI * 2);
-    ctx.fillStyle = HEAD_OUTLINE;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(ihx, ihy, 4, 0, Math.PI * 2);
-    ctx.fillStyle = HEAD_COLOR;
-    ctx.fill();
+    heads.push(ohx, ohy, ihx, ihy);
   }
+
+  // Polar head groups as lit spheres (shadows first so they never cover a neighbour)
+  for (let k = 0; k < heads.length; k += 2) drawSprite(SPRITE_SHADOW, heads[k] + SHADOW_OFF.x * 0.6, heads[k + 1] + SHADOW_OFF.y * 0.6, 5.5);
+  for (let k = 0; k < heads.length; k += 2) drawSprite(SPRITE_HEAD, heads[k], heads[k + 1], 4.6);
 }
 
-// Particle Class
+// ---------- Particle Class ----------
 class Particle {
   constructor(x, y, initialPka, t) {
     this.x = x;
@@ -266,6 +658,13 @@ class Particle {
     this.vx = randomGauss(0, VELOCITY_SIGMA);
     this.vy = randomGauss(0, VELOCITY_SIGMA);
     this.clampSpeed(1.0);
+
+    // Orientation for tumbling: the proton sits along a unit vector that rotates in 3D about a random axis
+    const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+    this.dir = [Math.sin(ph) * Math.cos(th), Math.sin(ph) * Math.sin(th), Math.cos(ph)];
+    const ath = Math.random() * Math.PI * 2, aph = Math.acos(2 * Math.random() - 1);
+    this.axis = [Math.sin(aph) * Math.cos(ath), Math.sin(aph) * Math.sin(ath), Math.cos(aph)];
+    this.spin = (0.04 + Math.random() * 0.08) * (Math.random() < 0.5 ? -1 : 1);   // radians per frame at 1x speed
 
     this.compartment = 'outside';
     const fIonized = calcFIonized(initialPka, PH_CYTOSOL);
@@ -286,7 +685,7 @@ class Particle {
     }
   }
 
-  updateState(pKaVal, t, instant = false) {
+  updateState(pKaVal, t, instant = false, pSwitch = 0.10) {
     const dx = this.x - LYSO_CENTER.x;
     const dy = this.y - LYSO_CENTER.y;
     const dist = Math.hypot(dx, dy);
@@ -296,54 +695,48 @@ class Particle {
     // Block state changes inside bilayer
     if (dist >= rIn && dist <= rOut) return;
 
-    let ph = dist < rIn ? PH_LYSOSOME : PH_CYTOSOL;
+    const ph = dist < rIn ? PH_LYSOSOME : PH_CYTOSOL;
     this.compartment = dist < rIn ? 'inside' : 'outside';
 
     const fIonized = calcFIonized(pKaVal, ph);
 
-    if (instant || Math.random() < 0.10) {
+    if (instant || Math.random() < pSwitch) {
       this.state = Math.random() < fIonized ? 'ionized' : 'neutral';
     }
   }
 
   enforceMembraneBoundary(t) {
-    if (this.state === 'ionized') {
-      let dx = this.x - LYSO_CENTER.x;
-      let dy = this.y - LYSO_CENTER.y;
-      let dist = Math.hypot(dx, dy) || 1;
-      const nx = dx / dist, ny = dy / dist;
+    if (this.state !== 'ionized') return;
+    const dx = this.x - LYSO_CENTER.x;
+    const dy = this.y - LYSO_CENTER.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const nx = dx / dist, ny = dy / dist;
 
-      const angle = Math.atan2(dy, dx);
-      const [rIn, rOut] = getMembraneBoundaries(angle, t);
+    const angle = Math.atan2(dy, dx);
+    const [rIn, rOut] = getMembraneBoundaries(angle, t);
 
-      if (this.compartment === 'inside') {
-        const rMaxAllowed = rIn - BUFFER;
-        if (dist > rMaxAllowed) {
-          this.x = LYSO_CENTER.x + nx * rMaxAllowed;
-          this.y = LYSO_CENTER.y + ny * rMaxAllowed;
-          const dot = this.vx * nx + this.vy * ny;
-          if (dot > 0) {
-            this.vx -= 2 * dot * nx;
-            this.vy -= 2 * dot * ny;
-          }
-        }
-      } else {
-        const rMinAllowed = rOut + BUFFER;
-        if (dist < rMinAllowed) {
-          this.x = LYSO_CENTER.x + nx * rMinAllowed;
-          this.y = LYSO_CENTER.y + ny * rMinAllowed;
-          const dot = this.vx * nx + this.vy * ny;
-          if (dot < 0) {
-            this.vx -= 2 * dot * nx;
-            this.vy -= 2 * dot * ny;
-          }
-        }
+    if (this.compartment === 'inside') {
+      const rMaxAllowed = rIn - BUFFER;
+      if (dist > rMaxAllowed) {
+        this.x = LYSO_CENTER.x + nx * rMaxAllowed;
+        this.y = LYSO_CENTER.y + ny * rMaxAllowed;
+        const dot = this.vx * nx + this.vy * ny;
+        if (dot > 0) { this.vx -= 2 * dot * nx; this.vy -= 2 * dot * ny; }
+      }
+    } else {
+      const rMinAllowed = rOut + BUFFER;
+      if (dist < rMinAllowed) {
+        this.x = LYSO_CENTER.x + nx * rMinAllowed;
+        this.y = LYSO_CENTER.y + ny * rMinAllowed;
+        const dot = this.vx * nx + this.vy * ny;
+        if (dot < 0) { this.vx -= 2 * dot * nx; this.vy -= 2 * dot * ny; }
       }
     }
   }
 
-  move(pKaVal, t, speedMultiplier) {
-    this.updateState(pKaVal, t);
+  // step = fraction of a 60 fps frame this sub-step covers (motion is time-based, so speed doesn't drop with frame rate)
+  move(pKaVal, t, speedMultiplier, step = 1) {
+    this.updateState(pKaVal, t, false, 1 - Math.pow(0.9, step));
 
     const dx = this.x - LYSO_CENTER.x;
     const dy = this.y - LYSO_CENTER.y;
@@ -351,51 +744,66 @@ class Particle {
     const angle = Math.atan2(dy, dx);
     const [rIn, rOut] = getMembraneBoundaries(angle, t);
 
-    const effectiveSpeed = (dist >= rIn && dist <= rOut) 
-      ? speedMultiplier * MEMBRANE_SPEED_FACTOR 
-      : speedMultiplier;
+    const effectiveSpeed = step * ((dist >= rIn && dist <= rOut)
+      ? speedMultiplier * MEMBRANE_SPEED_FACTOR
+      : speedMultiplier);
 
     let nextX = this.x + this.vx * effectiveSpeed;
     let nextY = this.y + this.vy * effectiveSpeed;
 
-    if (nextX < 15 || nextX > LOGICAL_WIDTH - 15) {
-      this.vx *= -1;
-      nextX = this.x;
-    }
-    if (nextY < 15 || nextY > LOGICAL_HEIGHT - 140) {
-      this.vy *= -1;
-      nextY = this.y;
-    }
+    if (nextX < 15 || nextX > WORLD_W - 15) { this.vx *= -1; nextX = this.x; }
+    if (nextY < 15 || nextY > WORLD_H - 15) { this.vy *= -1; nextY = this.y; }
 
     this.x = nextX;
     this.y = nextY;
 
     this.enforceMembraneBoundary(t);
     this.clampSpeed(speedMultiplier);
+    this.tumble(this.spin * effectiveSpeed);
   }
 
-  draw(ctx) {
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    if (this.state === 'ionized') {
-      ctx.fillStyle = COLOR_IONIZED;
-      ctx.fill();
+  // Rotate the orientation vector about this particle's axis (Rodrigues' formula); the axis drifts slowly so the motion looks random
+  tumble(angle) {
+    const [kx, ky, kz] = this.axis, [vx, vy, vz] = this.dir;
+    const c = Math.cos(angle), s = Math.sin(angle), d = kx * vx + ky * vy + kz * vz;
+    let x = vx * c + (ky * vz - kz * vy) * s + kx * d * (1 - c);
+    let y = vy * c + (kz * vx - kx * vz) * s + ky * d * (1 - c);
+    let z = vz * c + (kx * vy - ky * vx) * s + kz * d * (1 - c);
+    const n = Math.hypot(x, y, z) || 1;
+    this.dir = [x / n, y / n, z / n];
 
-      // Attached Proton (H+)
-      const protonX = this.x + this.radius * 0.6;
-      const protonY = this.y - this.radius * 0.6;
-      ctx.beginPath();
-      ctx.arc(protonX, protonY, 2, 0, Math.PI * 2);
-      ctx.fillStyle = COLOR_PROTON;
-      ctx.fill();
+    const a = this.axis;
+    a[0] += randomGauss(0, 0.03); a[1] += randomGauss(0, 0.03); a[2] += randomGauss(0, 0.03);
+    const m = Math.hypot(a[0], a[1], a[2]) || 1;
+    this.axis = [a[0] / m, a[1] / m, a[2] / m];
+  }
+
+  drawShadow() {
+    drawSprite(SPRITE_SHADOW, this.x + SHADOW_OFF.x, this.y + SHADOW_OFF.y, this.radius * 1.25);
+  }
+
+  draw() {
+    const r = this.radius;
+    if (this.state === 'ionized') {
+      // Attached proton (H+): a small lit sphere on the surface, placed by the tumbling orientation.
+      // z > 0 faces the viewer (drawn in front); z < 0 is behind the sphere (drawn first, mostly hidden).
+      const [ux, uy, uz] = this.dir;
+      const px = this.x + ux * r * 0.95, py = this.y + uy * r * 0.95;
+      const pr = 2.2 * (1 + 0.12 * uz);
+      const drawProton = () => {
+        drawSprite(SPRITE_SHADOW, px + 0.6, py + 0.8, pr * 1.2);
+        drawSprite(SPRITE_PROTON, px, py, pr);
+      };
+      if (uz < 0) drawProton();
+      drawSprite(SPRITE_IONIZED, this.x, this.y, r);
+      if (uz >= 0) drawProton();
     } else {
-      ctx.fillStyle = COLOR_NEUTRAL;
-      ctx.fill();
+      drawSprite(SPRITE_NEUTRAL, this.x, this.y, r);
     }
   }
 }
 
-// Particle Collisions
+// ---------- Particle Collisions ----------
 function handleParticleCollisions(particles, t, speedMultiplier) {
   const cellSize = PARTICLE_RADIUS * 3;
   const grid = new Map();
@@ -412,8 +820,7 @@ function handleParticleCollisions(particles, t, speedMultiplier) {
     for (let ncx = cx; ncx <= cx + 1; ncx++) {
       for (let ncy = cy - 1; ncy <= cy + 1; ncy++) {
         if (ncx === cx && ncy < cy) continue;
-        const neighborKey = `${ncx},${ncy}`;
-        const neighborCell = grid.get(neighborKey);
+        const neighborCell = grid.get(`${ncx},${ncy}`);
         if (!neighborCell) continue;
 
         for (const p1 of cellParticles) {
@@ -440,11 +847,8 @@ function handleParticleCollisions(particles, t, speedMultiplier) {
               const vDotN = vrx * nx + vry * ny;
 
               if (vDotN > 0) {
-                p1.vx -= vDotN * nx;
-                p1.vy -= vDotN * ny;
-                p2.vx += vDotN * nx;
-                p2.vy += vDotN * ny;
-
+                p1.vx -= vDotN * nx; p1.vy -= vDotN * ny;
+                p2.vx += vDotN * nx; p2.vy += vDotN * ny;
                 p1.clampSpeed(speedMultiplier);
                 p2.clampSpeed(speedMultiplier);
               }
@@ -461,9 +865,9 @@ function handleParticleCollisions(particles, t, speedMultiplier) {
 
 function generateOutsideParticles(currentPka) {
   const newParticles = [];
-  while (newParticles.length < NUM_PARTICLES) {
-    const rx = 25 + Math.random() * (LOGICAL_WIDTH - 50);
-    const ry = 25 + Math.random() * (LOGICAL_HEIGHT - 170);
+  while (newParticles.length < numParticles) {
+    const rx = 25 + Math.random() * (WORLD_W - 50);
+    const ry = 25 + Math.random() * (WORLD_H - 50);
 
     const dx = rx - LYSO_CENTER.x;
     const dy = ry - LYSO_CENTER.y;
@@ -471,141 +875,391 @@ function generateOutsideParticles(currentPka) {
     const angle = Math.atan2(dy, dx);
     const [, rOut] = getMembraneBoundaries(angle, 0.0);
 
-    if (dist > rOut + BUFFER) {
-      newParticles.push(new Particle(rx, ry, currentPka, 0.0));
-    }
+    if (dist > rOut + BUFFER) newParticles.push(new Particle(rx, ry, currentPka, 0.0));
   }
   return newParticles;
 }
 
-let particles = generateOutsideParticles(pka);
-
-// Coordinate Conversion for Responsive Autoscaling
-function getLogicalCoords(e) {
-  const rect = canvas.getBoundingClientRect();
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-  return {
-    x: (clientX - rect.left) * (LOGICAL_WIDTH / rect.width),
-    y: (clientY - rect.top) * (LOGICAL_HEIGHT / rect.height)
-  };
-}
-
-// Input Handlers
-function handlePointerDown(e) {
-  const { x: mx, y: my } = getLogicalCoords(e);
-  const btnX = LOGICAL_WIDTH - 140;
-
-  // Pause / Play
-  if (mx >= btnX && mx <= btnX + 110 && my >= 18 && my <= 54) {
-    paused = !paused;
-  }
-  // Reset
-  else if (mx >= btnX && mx <= btnX + 110 && my >= 62 && my <= 98) {
-    particles = generateOutsideParticles(pka);
-    simTime = 0.0;
-    paused = true;
-    ratioSamples = [];
-    lastUpdateTime = 0.0;
-    displayedTrappingRatio = 0.0;
-  }
-  // pKa Slider
-  else if (mx >= 260 && mx <= 500 && my >= LOGICAL_HEIGHT - 95 && my <= LOGICAL_HEIGHT - 65) {
-    draggingPka = true;
-    updatePkaFromMouse(mx);
-  }
-  // Speed Slider
-  else if (mx >= 260 && mx <= 500 && my >= LOGICAL_HEIGHT - 45 && my <= LOGICAL_HEIGHT - 15) {
-    draggingSpeed = true;
-    updateSpeedFromMouse(mx);
-  }
-}
-
-function handlePointerMove(e) {
-  if (!draggingPka && !draggingSpeed) return;
-  const { x: mx } = getLogicalCoords(e);
-
-  if (draggingPka) updatePkaFromMouse(mx);
-  if (draggingSpeed) updateSpeedFromMouse(mx);
-}
-
-function handlePointerUp() {
-  draggingPka = false;
-  draggingSpeed = false;
-}
-
-function updatePkaFromMouse(mx) {
-  const clampedX = Math.max(260, Math.min(mx, 500));
-  pka = parseFloat((5.0 + (clampedX - 260) / 240.0 * 3.0).toFixed(2));
-  for (const p of particles) p.updateState(pka, simTime, true);
-}
-
-function updateSpeedFromMouse(mx) {
-  const clampedX = Math.max(260, Math.min(mx, 500));
-  speedMult = parseFloat((0.2 + (clampedX - 260) / 240.0 * 2.8).toFixed(1));
-}
-
-canvas.addEventListener('mousedown', handlePointerDown);
-window.addEventListener('mousemove', handlePointerMove);
-window.addEventListener('mouseup', handlePointerUp);
-
-canvas.addEventListener('touchstart', (e) => { handlePointerDown(e); e.preventDefault(); }, { passive: false });
-window.addEventListener('touchmove', handlePointerMove, { passive: false });
-window.addEventListener('touchend', handlePointerUp);
-
-// High DPI Scaling
+// ---------- Responsive canvas: fills the window; the core region sits between the top tab and the bottom panels ----------
+const bottomBar = document.getElementById('bottom-bar');
+let view = { scale: 1, dpr: 1, w: 0, h: 0 };
+let particles = [];
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = LOGICAL_WIDTH * dpr;
-  canvas.height = LOGICAL_HEIGHT * dpr;
-  ctx.resetTransform();
-  ctx.scale(dpr, dpr);
+  const w = window.innerWidth, h = window.innerHeight;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  const hhTop = document.getElementById('hh-top');
+  // the pKa bar sits just below where the opened controls panel (plus its tab) ends, so the two never overlap
+  const panelH = document.getElementById('controls-panel').offsetHeight;
+  const hhTopPx = panelH + 36 + 6, hhH = hhTop ? hhTop.offsetHeight : 40;
+  document.documentElement.style.setProperty('--hhtop', hhTopPx + 'px');
+  document.documentElement.style.setProperty('--toasttop', (hhTopPx + hhH + 8) + 'px');
+  const top = hhTopPx + hhH + 6, bottom = bottomBar.offsetHeight + 4;
+  const scale = Math.max(0.1, Math.min(w / CORE_W, (h - top - bottom) / CORE_H));
+  view = { scale, dpr, w, h };
+
+  const oldCx = LYSO_CENTER.x, oldCy = LYSO_CENTER.y;
+  WORLD_W = w / scale;
+  WORLD_H = h / scale;
+  LYSO_CENTER.x = WORLD_W / 2;
+  // lysosome sits just under the pKa bar, centred in any extra height, with the label underneath
+  const extra = Math.max(0, (h - top - bottom) / scale - CORE_H);
+  LYSO_CENTER.y = top / scale + extra / 2 + (CORE_H - 40) / 2;   // centred in the space above the label (layout scale unchanged)
+  LABEL_Y = (h - bottom) / scale - extra / 2 - 8;
+
+  // keep particles in the same place relative to the lysosome, then inside the new walls
+  for (const p of particles) {
+    p.x = Math.min(WORLD_W - 16, Math.max(16, p.x + LYSO_CENTER.x - oldCx));
+    p.y = Math.min(WORLD_H - 16, Math.max(16, p.y + LYSO_CENTER.y - oldCy));
+  }
 }
 window.addEventListener('resize', resizeCanvas);
+new ResizeObserver(resizeCanvas).observe(bottomBar);
+new ResizeObserver(resizeCanvas).observe(document.getElementById('hh-top'));
+new ResizeObserver(resizeCanvas).observe(document.getElementById('controls-panel'));
 resizeCanvas();
 
-// Main Loop
+// Default number of molecules
+numParticles = 500;
+document.getElementById('count-slider').value = numParticles;
+document.getElementById('count-value').textContent = numParticles;
+particles = generateOutsideParticles(pka);
+
+// ---------- HTML Controls ----------
+const pkaSlider = document.getElementById('pka-slider');
+const pkaValue = document.getElementById('pka-value');
+const speedSlider = document.getElementById('speed-slider');
+const speedValue = document.getElementById('speed-value');
+const playBtn = document.getElementById('btn-play');
+const resetBtn = document.getElementById('btn-reset');
+const factorValue = document.getElementById('factor-value');
+
+function fmtPct(f) { const v = f * 100; return (v >= 99.95 || v < 0.05) ? v.toFixed(2) + '%' : (v >= 99 || v < 1) ? v.toFixed(1) + '%' : v.toFixed(0) + '%'; }
+function updateHH() {
+  document.getElementById('hh-pka').textContent = pka.toFixed(2);
+  document.getElementById('hh-out').textContent = fmtPct(calcFIonized(pka, PH_CYTOSOL));
+  document.getElementById('hh-in').textContent = fmtPct(calcFIonized(pka, PH_LYSOSOME));
+}
+updateHH();
+pkaSlider.addEventListener('input', () => {
+  pka = parseFloat(parseFloat(pkaSlider.value).toFixed(2));
+  pkaValue.textContent = pka.toFixed(2);
+  updateHH();
+  for (const p of particles) p.updateState(pka, simTime, true);
+});
+
+// Particle count: add new molecules in the cytosol or remove randomly chosen ones, without resetting
+const countSlider = document.getElementById('count-slider');
+countSlider.addEventListener('input', () => {
+  numParticles = parseInt(countSlider.value, 10);
+  document.getElementById('count-value').textContent = numParticles;
+  if (particles.length < numParticles) {
+    const need = numParticles - particles.length, saved = numParticles;
+    numParticles = need;
+    for (const p of generateOutsideParticles(pka)) { p.updateState(pka, simTime, true); particles.push(p); }
+    numParticles = saved;
+  } else {
+    while (particles.length > numParticles) particles.splice(Math.floor(Math.random() * particles.length), 1);
+  }
+});
+
+speedSlider.addEventListener('input', () => {
+  speedMult = parseFloat(parseFloat(speedSlider.value).toFixed(1));
+  speedValue.textContent = speedMult.toFixed(1) + 'x';
+});
+
+function refreshPlayButton() {
+  playBtn.textContent = paused ? 'PLAY' : 'PAUSE';
+  playBtn.className = 'btn ' + (paused ? 'btn-play' : 'btn-pause');
+}
+
+playBtn.addEventListener('click', () => { paused = !paused; refreshPlayButton(); });
+
+resetBtn.addEventListener('click', () => {
+  particles = generateOutsideParticles(pka);
+  simTime = 0.0;
+  paused = true;
+  ratioSamples = [];
+  lastUpdateTime = 0.0;
+  displayedTrappingRatio = 0.0;
+  refreshPlayButton();
+});
+
+// ---------- TEST YOUR UNDERSTANDING ----------
+// Full skeletal structures of the Met kinase inhibitors GEN-203 (nF = 1) and GEN-890 (nF = 2),
+// drawn after Charifson & Walters, J. Med. Chem. 2014, Figure 11A. Bond length = 1 unit; y points down.
+function molSVG(nF, acid) {
+  const L = 22, col = acid ? '#93c5fd' : '#f87171';
+  const P = (a, r = 1) => [r * Math.cos(a * Math.PI / 180), r * Math.sin(a * Math.PI / 180)];
+  const add = (p, q) => [p[0] + q[0], p[1] + q[1]];
+  const A = {};
+  // N-ethylpiperidine (N1 at the left vertex)
+  A.N1 = [-1, 0]; A.C2 = [-0.5, -0.866]; A.C3 = [0.5, -0.866]; A.C4 = [1, 0]; A.C5 = [0.5, 0.866]; A.C6 = [-0.5, 0.866];
+  const PIP = [0, 0];
+  A.Ea = add(A.N1, P(210)); A.Eb = add(A.Ea, P(150));
+  if (nF === 1) A.F1 = add(A.C3, P(300));
+  else { A.F1 = add(A.C3, P(270)); A.F2 = add(A.C3, P(330)); }
+  if (acid) A.HN = add(A.N1, P(150, 0.85));
+  // 4-NH linking to C3 of the 1H-pyrazolo[3,4-b]pyridine
+  A.NH = add(A.C4, P(12));
+  A.Pz3 = add(A.NH, [0.309, 0.951]);
+  A.Pz3a = add(A.Pz3, [0.951, 0.309]);
+  A.Pz2 = add(A.Pz3, [-0.588, 0.809]);
+  A.Pz1 = add(A.Pz2, [0.588, 0.809]);
+  const Q = add(A.Pz3a, [0.866, 0.5]);
+  A.Py4 = add(Q, P(270)); A.Py5 = add(Q, P(330)); A.Py6 = add(Q, P(30)); A.Py7 = add(Q, P(90)); A.Py7a = add(Q, P(150));
+  const PZ = [0, 0]; ['Pz3', 'Pz3a', 'Pz2', 'Pz1', 'Py7a'].forEach(k => { PZ[0] += A[k][0] / 5; PZ[1] += A[k][1] / 5; });
+  // aryl ether: 2-fluoro-4-amidophenyl
+  A.O1 = add(A.Py4, P(270)); A.Ar1 = add(A.O1, P(330));
+  const R = add(A.Ar1, P(330));
+  A.Ar2 = add(R, P(210)); A.Ar3 = add(R, P(270)); A.Ar4 = add(R, P(330)); A.Ar5 = add(R, P(30)); A.Ar6 = add(R, P(90));
+  A.F3 = add(A.Ar2, P(210));
+  // amide and 2-(4-fluorophenyl)-3-oxopyridazine
+  A.Nam = add(A.Ar4, P(330)); A.Cam = add(A.Nam, P(30)); A.Oam = add(A.Cam, P(90)); A.Pd4 = add(A.Cam, P(330));
+  const S = add(A.Pd4, P(330));
+  A.Pd5 = add(S, P(210)); A.Pd6 = add(S, P(270)); A.Pd1 = add(S, P(330)); A.Pd2 = add(S, P(30)); A.Pd3 = add(S, P(90));
+  A.Opd = add(A.Pd3, P(90));
+  A.Fp1 = add(A.Pd2, P(30));
+  const T = add(A.Fp1, P(30));
+  A.Fp2 = add(T, P(270)); A.Fp3 = add(T, P(330)); A.Fp4 = add(T, P(30)); A.Fp5 = add(T, P(90)); A.Fp6 = add(T, P(150));
+  A.F4 = add(A.Fp4, P(30));
+
+  // atom labels: [text, attached-H offset or null]
+  const LB = { N1: ['N'], F1: ['F'], F2: ['F'], HN: ['H'], NH: ['N', [0.52, 0]], Pz2: ['N'], Pz1: ['N', [0, 0.6]], Py7: ['N'],
+               O1: ['O'], F3: ['F'], Nam: ['N', [0, -0.6]], Oam: ['O'], Pd1: ['N'], Pd2: ['N'], Opd: ['O'], F4: ['F'] };
+
+  // bonds: [a, b, type, ringCentre]  type: s single, d double (inner line toward ringCentre), D symmetric double, h hashed wedge (narrow at a)
+  const B = [
+    ['N1', 'C2', 's'], ['C2', 'C3', 's'], ['C3', 'C4', 's'], ['C4', 'C5', 's'], ['C5', 'C6', 's'], ['C6', 'N1', 's'],
+    ['N1', 'Ea', 's'], ['Ea', 'Eb', 's'], ['C3', 'F1', nF === 1 ? 'h' : 's'], ['C4', 'NH', 'h'], ['NH', 'Pz3', 's'],
+    ['Pz3', 'Pz2', 'd', PZ], ['Pz2', 'Pz1', 's'], ['Pz1', 'Py7a', 's'], ['Py7a', 'Pz3a', 's'], ['Pz3a', 'Pz3', 's'],
+    ['Pz3a', 'Py4', 'd', Q], ['Py4', 'Py5', 's'], ['Py5', 'Py6', 'd', Q], ['Py6', 'Py7', 's'], ['Py7', 'Py7a', 'd', Q],
+    ['Py4', 'O1', 's'], ['O1', 'Ar1', 's'],
+    ['Ar1', 'Ar2', 'd', R], ['Ar2', 'Ar3', 's'], ['Ar3', 'Ar4', 'd', R], ['Ar4', 'Ar5', 's'], ['Ar5', 'Ar6', 'd', R], ['Ar6', 'Ar1', 's'],
+    ['Ar2', 'F3', 's'], ['Ar4', 'Nam', 's'], ['Nam', 'Cam', 's'], ['Cam', 'Oam', 'D'], ['Cam', 'Pd4', 's'],
+    ['Pd4', 'Pd5', 'd', S], ['Pd5', 'Pd6', 's'], ['Pd6', 'Pd1', 'd', S], ['Pd1', 'Pd2', 's'], ['Pd2', 'Pd3', 's'], ['Pd3', 'Pd4', 's'],
+    ['Pd3', 'Opd', 'D'], ['Pd2', 'Fp1', 's'],
+    ['Fp1', 'Fp2', 'd', T], ['Fp2', 'Fp3', 's'], ['Fp3', 'Fp4', 'd', T], ['Fp4', 'Fp5', 's'], ['Fp5', 'Fp6', 'd', T], ['Fp6', 'Fp1', 's'],
+    ['Fp4', 'F4', 's']
+  ];
+  if (nF === 2) B.push(['C3', 'F2', 's']);
+  if (acid) B.push(['N1', 'HN', 's']);
+
+  const f = v => (v * L).toFixed(1);
+  const line = (x1, y1, x2, y2) => `<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}"/>`;
+  let s = '', hs = '';
+  for (const [a, b, type, ctr] of B) {
+    let [x1, y1] = A[a], [x2, y2] = A[b];
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+    const ta = LB[a] ? 0.3 : 0, tb = LB[b] ? 0.3 : 0;
+    x1 += ux * ta; y1 += uy * ta; x2 -= ux * tb; y2 -= uy * tb;
+    if (type === 'h') {   // hashed wedge: bars widen from a to b
+      const n = 7;
+      for (let k = 0; k < n; k++) {
+        const u = (k + 0.5) / n, w = 0.03 + 0.15 * u, cx = x1 + (x2 - x1) * u, cy = y1 + (y2 - y1) * u;
+        hs += line(cx - nx * w, cy - ny * w, cx + nx * w, cy + ny * w);
+      }
+    } else if (type === 'D') {
+      const o = 0.085;
+      s += line(x1 + nx * o, y1 + ny * o, x2 + nx * o, y2 + ny * o) + line(x1 - nx * o, y1 - ny * o, x2 - nx * o, y2 - ny * o);
+    } else {
+      s += line(x1, y1, x2, y2);
+      if (type === 'd') {
+        let sx = nx, sy = ny; const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        if (sx * (ctr[0] - mx) + sy * (ctr[1] - my) < 0) { sx = -sx; sy = -sy; }
+        const o = 0.18, sh = 0.15;
+        s += line(x1 + sx * o + ux * sh, y1 + sy * o + uy * sh, x2 + sx * o - ux * sh, y2 + sy * o - uy * sh);
+      }
+    }
+  }
+  let t = '';
+  for (const k in LB) {
+    if (!A[k]) continue;
+    const [txt, h] = LB[k];
+    t += `<text x="${f(A[k][0])}" y="${f(A[k][1])}">${txt}</text>`;
+    if (h) t += `<text x="${f(A[k][0] + h[0])}" y="${f(A[k][1] + h[1])}">H</text>`;
+  }
+  if (acid) {
+    const c = add(A.N1, P(100, 0.62));
+    t += `<text x="${f(c[0])}" y="${f(c[1])}" style="font-size:${(0.5 * L).toFixed(1)}px">+</text>`;
+  } else {   // lone pair on the basic piperidine nitrogen
+    const c = add(A.N1, P(150, 0.5)), d = P(60, 0.13);
+    t += `<circle cx="${f(c[0] + d[0])}" cy="${f(c[1] + d[1])}" r="1.5"/><circle cx="${f(c[0] - d[0])}" cy="${f(c[1] - d[1])}" r="1.5"/>`;
+  }
+  // bounding box
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const k in A) { x0 = Math.min(x0, A[k][0]); y0 = Math.min(y0, A[k][1]); x1 = Math.max(x1, A[k][0]); y1 = Math.max(y1, A[k][1]); }
+  y1 = Math.max(y1, A.Pz1[1] + 0.6);
+  const pad = 0.45;
+  const vb = [x0 - pad, y0 - pad - 0.15, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad + 0.15].map(f).join(' ');
+  return `<svg class="${acid ? 'mol-acid' : 'mol-base'}" viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" role="img"
+      aria-label="${acid ? 'conjugate acid (BH+)' : 'neutral amine (B:)'}">
+    <g stroke="${col}" stroke-width="1.6" stroke-linecap="round">${s}</g>
+    <g stroke="${col}" stroke-width="1.2" stroke-linecap="round">${hs}</g>
+    <g fill="${col}" stroke="none" font-family="ui-sans-serif, system-ui, Arial, sans-serif" font-weight="700" font-size="${(0.62 * L).toFixed(1)}px"
+       text-anchor="middle" dominant-baseline="central">${t}</g></svg>`;
+}
+document.querySelectorAll('.mol-slot').forEach(el => { el.outerHTML = molSVG(+el.dataset.nf, el.dataset.acid === '1'); });
+
+const DRUGS = { A: { pka: 7.5, name: 'GEN-203' }, B: { pka: 5.5, name: 'GEN-890' } };
+const CORRECT = { 1: 'B', 2: 'A' };
+const quizWrap = document.getElementById('quiz-wrap');
+const quizPanel = document.getElementById('quiz-panel');
+const instrWrap = document.getElementById('instr-wrap');
+const testPrompt = document.getElementById('test-prompt');
+let q2Choice = null;
+
+// Only one drawer at a time; the other drawer's tab hides while one is open
+function syncDrawers() {
+  document.body.classList.toggle('quiz-open', quizWrap.classList.contains('open'));
+  document.body.classList.toggle('instr-open', instrWrap.classList.contains('open'));
+}
+new MutationObserver(syncDrawers).observe(quizWrap, { attributes: true, attributeFilter: ['class'] });
+new MutationObserver(syncDrawers).observe(instrWrap, { attributes: true, attributeFilter: ['class'] });
+document.getElementById('quiz-tab').addEventListener('click', () => { quizWrap.classList.toggle('open'); instrWrap.classList.remove('open'); });
+document.getElementById('q-close').addEventListener('click', () => quizWrap.classList.remove('open'));
+document.getElementById('instr-tab').addEventListener('click', () => { instrWrap.classList.toggle('open'); quizWrap.classList.remove('open'); });
+document.getElementById('i-close').addEventListener('click', () => instrWrap.classList.remove('open'));
+
+const FEEDBACK = {
+  1: {
+    B: '<b>Correct.</b> Fluorine pulls electron density away from the nitrogen by induction, so its lone pair is less available to accept H⁺. With two fluorines, GEN-890 is the weaker base: its <b class="cbh">BH⁺</b> has the lower pK<sub>a</sub> (≈ 5.5 vs ≈ 7.5).',
+    A: '<b>Not quite.</b> Fluorine pulls electron density away from the nitrogen by induction, so each fluorine makes the lone pair <i>less</i> available to accept H⁺. <b>GEN-890</b> (two fluorines) is the weaker base: its <b class="cbh">BH⁺</b> has the lower pK<sub>a</sub> (≈ 5.5 vs ≈ 7.5).'
+  },
+  2: {
+    A: '<b>Correct.</b> Both drugs can cross the membrane in their neutral form (<b class="cb">B:</b>). At pH 5.0, GEN-203 (pK<sub>a</sub> ≈ 7.5) is over 99% <b class="cbh">BH⁺</b> and stays trapped, while about a quarter of GEN-890 (pK<sub>a</sub> ≈ 5.5) is still neutral and can leak back out.',
+    B: '<b>Not quite.</b> At pH 5.0, about a quarter of GEN-890 (pK<sub>a</sub> ≈ 5.5) is still neutral and can leak back out of the lysosome. <b>GEN-203</b> (pK<sub>a</sub> ≈ 7.5) is over 99% <b class="cbh">BH⁺</b> at pH 5.0, and <b class="cbh">BH⁺</b> cannot cross the membrane, so it accumulates far more.'
+  }
+};
+
+document.querySelectorAll('.q-opt').forEach(btn => btn.addEventListener('click', () => {
+  const q = +btn.dataset.q, a = btn.dataset.a, right = a === CORRECT[q];
+  document.querySelectorAll(`.q-opt[data-q="${q}"]`).forEach(b => {
+    b.disabled = true;
+    if (b.dataset.a === CORRECT[q]) b.classList.add('right');
+  });
+  if (!right) btn.classList.add('wrong');
+  const fb = document.getElementById('fb' + q);
+  fb.innerHTML = FEEDBACK[q][a];
+  fb.className = 'feedback ' + (right ? 'ok' : 'no');
+  if (q === 1) { document.getElementById('q2').classList.remove('locked'); quizPanel.classList.add('pka-shown'); }
+  if (q === 2) {
+    q2Choice = a;
+    document.querySelectorAll('.drug').forEach(d => d.classList.add('clickable'));
+    document.getElementById('drug-' + a).classList.add('chosen');
+    testPrompt.innerHTML = `👆 Now click <b>${DRUGS[a].name}</b> to test it in the simulation. You can try the other drug afterwards.`;
+    testPrompt.style.display = 'block';
+    
+  }
+}));
+
+const toast = document.getElementById('toast');
+let toastTimer = null;
+function showToast(html) {
+  toast.innerHTML = html; toast.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 20000);
+}
+
+function testDrug(key) {
+  const d = DRUGS[key];
+  pka = d.pka;
+  pkaSlider.value = d.pka; pkaValue.textContent = d.pka.toFixed(2); updateHH();
+  speedMult = 5.0;
+  speedSlider.value = 5.0; speedValue.textContent = '5.0x';
+  particles = generateOutsideParticles(pka);
+  simTime = 0.0; ratioSamples = []; lastUpdateTime = 0.0; displayedTrappingRatio = 0.0;
+  paused = false; refreshPlayButton();
+  quizWrap.classList.remove('open');
+  showToast(`Testing ${d.name} (pK<sub>a</sub> ≈ ${d.pka.toFixed(1)}) at maximum speed. Watch the trapping factor.`);
+}
+
+document.querySelectorAll('.drug').forEach(el => el.addEventListener('click', () => {
+  if (!el.classList.contains('clickable')) return;
+  document.querySelectorAll('.drug').forEach(d => d.classList.remove('chosen'));
+  testPrompt.style.display = 'none';
+  testDrug(el.dataset.drug);
+}));
+
+document.getElementById('q-restart').addEventListener('click', () => {
+  document.querySelectorAll('.q-opt').forEach(b => { b.disabled = false; b.classList.remove('right', 'wrong'); });
+  document.querySelectorAll('.feedback').forEach(f => { f.className = 'feedback'; f.innerHTML = ''; });
+  document.querySelectorAll('.drug').forEach(d => d.classList.remove('clickable', 'chosen'));
+  document.getElementById('q2').classList.add('locked');
+  testPrompt.style.display = 'none';
+  q2Choice = null;
+  quizPanel.classList.remove('pka-shown');
+  quizPanel.scrollTop = 0;
+});
+
+// Hue slides smoothly on a log scale: 1x green (hue 130) -> ~5x yellow -> ~10x orange -> 25x and above red (hue 0)
+function trapColor(r) {
+  const t = Math.min(1, Math.max(0, Math.log10(Math.max(r, 1)) / Math.log10(25)));
+  return `hsl(${(130 * (1 - t)).toFixed(0)}, 85%, ${(60 - 4 * t).toFixed(0)}%)`;
+}
+
+// ---------- Main Loop ----------
 let lastFrameTime = performance.now();
+let lastFactorText = '';
 
 function animate(now) {
   const dt = Math.min((now - lastFrameTime) / 1000.0, 0.1);
   lastFrameTime = now;
 
-  if (!paused) simTime += dt;
-
   if (!paused) {
-    for (const p of particles) p.move(pka, simTime, speedMult);
-    handleParticleCollisions(particles, simTime, speedMult);
+    // advance by real elapsed time (in 60 fps frames), split into sub-steps of at most one frame
+    const frames = dt * 60, nSub = Math.max(1, Math.ceil(frames * Math.max(1, speedMult / 2.5) - 1e-6)), step = frames / nSub;
+    for (let k = 0; k < nSub; k++) {
+      simTime += dt / nSub;
+      for (const p of particles) p.move(pka, simTime, speedMult, step);
+      handleParticleCollisions(particles, simTime, speedMult);
+    }
   }
 
-  // Render Background
-  ctx.fillStyle = COLOR_CYTOSOL;
-  ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+  // Enter world coordinates (the world covers the whole window)
+  ctx.setTransform(view.dpr * view.scale, 0, 0, view.dpr * view.scale, 0, 0);
+  ctx.save();
 
-  drawFluidLipidBilayer(ctx, simTime);
-  for (const p of particles) p.draw(ctx);
+  // Cytosol fills the window edge to edge
+  const cyto = ctx.createRadialGradient(LYSO_CENTER.x - WORLD_W * 0.2, LYSO_CENTER.y - WORLD_H * 0.3, 40,
+                                        LYSO_CENTER.x, LYSO_CENTER.y, Math.hypot(WORLD_W, WORLD_H) * 0.6);
+  cyto.addColorStop(0, '#2a4560');
+  cyto.addColorStop(1, '#152234');
+  ctx.fillStyle = cyto;
+  ctx.fillRect(0, 0, WORLD_W, WORLD_H);
 
-  // Statistics
-  const insideParticles = particles.filter(p => {
+  drawFluidLipidBilayer(simTime);
+
+  // Particles: all shadows first, then the spheres
+  for (const p of particles) p.drawShadow();
+  for (const p of particles) p.draw();
+
+  // Region titles
+  ctx.font = "bold 28px ui-sans-serif, system-ui, Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillText("INTRACELLULAR FLUID (pH 7.0)", LYSO_CENTER.x + 1.5, LABEL_Y + 1.5);
+  ctx.fillStyle = "#4ade80";
+  ctx.fillText("INTRACELLULAR FLUID (pH 7.0)", LYSO_CENTER.x, LABEL_Y);
+
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillText("LYSOSOME (pH 5.0)", LYSO_CENTER.x + 1.5, LYSO_CENTER.y + 11.5);
+  ctx.fillStyle = "#e5e7eb";
+  ctx.fillText("LYSOSOME (pH 5.0)", LYSO_CENTER.x, LYSO_CENTER.y + 10);
+  ctx.textAlign = "left";
+  ctx.restore();
+
+  // ---------- Statistics ----------
+  let nIn = 0, nOut = 0;
+  for (const p of particles) {
     const dx = p.x - LYSO_CENTER.x, dy = p.y - LYSO_CENTER.y;
-    const angle = Math.atan2(dy, dx);
-    const [rIn] = getMembraneBoundaries(angle, simTime);
-    return Math.hypot(dx, dy) < rIn;
-  });
-
-  const outsideParticles = particles.filter(p => {
-    const dx = p.x - LYSO_CENTER.x, dy = p.y - LYSO_CENTER.y;
-    const angle = Math.atan2(dy, dx);
-    const [, rOut] = getMembraneBoundaries(angle, simTime);
-    return Math.hypot(dx, dy) > rOut;
-  });
-
-  const nIn = insideParticles.length;
-  const nOut = outsideParticles.length;
+    const [rIn, rOut] = getMembraneBoundaries(Math.atan2(dy, dx), simTime);
+    const d = Math.hypot(dx, dy);
+    if (d < rIn) nIn++; else if (d > rOut) nOut++;
+  }
 
   const areaIn = Math.PI * (LYSO_RADIUS ** 2);
-  const areaOut = Math.max(1.0, ((LOGICAL_WIDTH - 30) * (LOGICAL_HEIGHT - 170)) - areaIn);
+  const areaOut = Math.max(1.0, ((WORLD_W - 30) * (WORLD_H - 30)) - areaIn);
   const concIn = (nIn / areaIn) * 10000;
   const concOut = (nOut / areaOut) * 10000;
   const instTrappingRatio = concOut > 0 ? concIn / concOut : 0;
@@ -622,87 +1276,12 @@ function animate(now) {
     }
   }
 
-  // Titles
-  ctx.fillStyle = "#1E5096";
-  ctx.font = "bold 22px Arial";
-  ctx.fillText("INTRACELLULAR FLUID (pH 7.0)", 25, 38);
-
-  ctx.fillStyle = "#464646";
-  ctx.textAlign = "center";
-  ctx.fillText("LYSOSOME (pH 5.0)", LYSO_CENTER.x, LYSO_CENTER.y + 7);
-  ctx.textAlign = "left";
-
-  // Buttons
-  const btnX = LOGICAL_WIDTH - 140;
-
-  // Play / Pause
-  ctx.fillStyle = paused ? COLOR_PLAY_BG : COLOR_PAUSE_BG;
-  ctx.beginPath(); ctx.roundRect(btnX, 18, 110, 36, 6); ctx.fill();
-  ctx.strokeStyle = "#1E1E1E"; ctx.lineWidth = 2; ctx.stroke();
-
-  ctx.fillStyle = COLOR_BTN_TEXT;
-  ctx.font = "bold 16px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText(paused ? "PLAY" : "PAUSE", btnX + 55, 41);
-
-  // Reset
-  ctx.fillStyle = COLOR_RESET_BG;
-  ctx.beginPath(); ctx.roundRect(btnX, 62, 110, 36, 6); ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = COLOR_BTN_TEXT;
-  ctx.fillText("RESET", btnX + 55, 85);
-  ctx.textAlign = "left";
-
-  // Control Panel
-  ctx.fillStyle = COLOR_UI_BG;
-  ctx.fillRect(0, LOGICAL_HEIGHT - 110, LOGICAL_WIDTH, 110);
-  ctx.strokeStyle = "#B4B4B4"; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(0, LOGICAL_HEIGHT - 110); ctx.lineTo(LOGICAL_WIDTH, LOGICAL_HEIGHT - 110); ctx.stroke();
-
-  // Legend
-  ctx.beginPath(); ctx.arc(35, LOGICAL_HEIGHT - 75, 6, 0, Math.PI * 2);
-  ctx.fillStyle = COLOR_NEUTRAL; ctx.fill();
-  ctx.fillStyle = COLOR_TEXT; ctx.font = "15px Arial";
-  ctx.fillText("Neutral Drug (B:)", 50, LOGICAL_HEIGHT - 70);
-
-  ctx.beginPath(); ctx.arc(35, LOGICAL_HEIGHT - 40, 6, 0, Math.PI * 2);
-  ctx.fillStyle = COLOR_IONIZED; ctx.fill();
-  ctx.beginPath(); ctx.arc(39, LOGICAL_HEIGHT - 44, 3, 0, Math.PI * 2);
-  ctx.fillStyle = COLOR_PROTON; ctx.fill();
-  ctx.fillStyle = COLOR_TEXT;
-  ctx.fillText("Ionized Drug (BH+)", 50, LOGICAL_HEIGHT - 35);
-
-  // Sliders
-  ctx.font = "bold 15px Arial";
-  ctx.fillText(`Drug pKa: ${pka.toFixed(2)}`, 260, LOGICAL_HEIGHT - 88);
-  ctx.fillStyle = "#B4B4B4";
-  ctx.fillRect(260, LOGICAL_HEIGHT - 78, 240, 8);
-  const handlePkaX = 260 + ((pka - 5.0) / 3.0) * 240;
-  ctx.beginPath(); ctx.arc(handlePkaX, LOGICAL_HEIGHT - 74, 10, 0, Math.PI * 2);
-  ctx.fillStyle = "#3278DC"; ctx.fill();
-
-  ctx.fillStyle = COLOR_TEXT;
-  ctx.fillText(`Particle Speed: ${speedMult.toFixed(1)}x`, 260, LOGICAL_HEIGHT - 40);
-  ctx.fillStyle = "#B4B4B4";
-  ctx.fillRect(260, LOGICAL_HEIGHT - 30, 240, 8);
-  const handleSpeedX = 260 + ((speedMult - 0.2) / 2.8) * 240;
-  ctx.beginPath(); ctx.arc(handleSpeedX, LOGICAL_HEIGHT - 26, 10, 0, Math.PI * 2);
-  ctx.fillStyle = "#3278DC"; ctx.fill();
-
-  // Equation
-  ctx.fillStyle = COLOR_TEXT;
-  ctx.fillText("Lysosomal Trapping Factor:", 530, LOGICAL_HEIGHT - 88);
-  ctx.font = "14px Arial";
-  ctx.fillText("[Concentration INSIDE]", 530, LOGICAL_HEIGHT - 65);
-  ctx.strokeStyle = COLOR_TEXT; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(530, LOGICAL_HEIGHT - 55); ctx.lineTo(700, LOGICAL_HEIGHT - 55); ctx.stroke();
-  ctx.fillText("[Concentration OUTSIDE]", 530, LOGICAL_HEIGHT - 38);
-
-  const statColor = displayedTrappingRatio > 10 ? "#B41E1E" : "#1E781E";
-  ctx.fillStyle = statColor;
-  ctx.font = "bold 22px Arial";
-  ctx.fillText(`=  ${displayedTrappingRatio.toFixed(1)}x`, 715, LOGICAL_HEIGHT - 50);
+  const txt = `= ${displayedTrappingRatio.toFixed(1)}x`;
+  if (txt !== lastFactorText) {
+    factorValue.textContent = txt;
+    factorValue.style.color = trapColor(displayedTrappingRatio);
+    lastFactorText = txt;
+  }
 
   requestAnimationFrame(animate);
 }
