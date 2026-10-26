@@ -91,6 +91,7 @@
     .drug-name span { font-weight: 400; color: #9ca3af; font-size: 0.78rem; }
     .rxn { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; margin-top: 0.2rem; }
     .rxn svg { height: auto; flex: 1 1 0; min-width: 0; }
+    .rxn .mol-b, .rxn .mol-a { display: contents; }
     .q-cols { display: grid; grid-template-columns: 1.5fr 1fr; gap: 0 1.1rem; align-items: start; }
     .q-cols .q-box:first-child { margin-top: 0.2rem; }
     @media (max-width: 960px) {
@@ -140,9 +141,16 @@
     @keyframes radiant { 0%,100% { box-shadow: 0 0 10px 2px rgba(250,204,21,0.55), 0 0 26px 6px rgba(250,204,21,0.25), inset 0 0 14px rgba(250,204,21,0.15); }
       50% { box-shadow: 0 0 18px 5px rgba(253,224,71,0.95), 0 0 48px 14px rgba(250,204,21,0.5), inset 0 0 24px rgba(250,204,21,0.3); } }
     @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 4px rgba(250,204,21,0.35); } 50% { box-shadow: 0 0 16px rgba(250,204,21,0.8); } }
-    #q-restart { margin-top: 0.8rem; background: none; border: 1px solid #4b5563; color: #9ca3af; border-radius: 0.375rem; padding: 0.3rem 0.7rem;
+    #q-restart { margin-top: 0; background: none; border: 1px solid #4b5563; color: #9ca3af; border-radius: 0.375rem; padding: 0.3rem 0.7rem;
       font-size: 0.75rem; font-weight: 700; cursor: pointer; }
     #q-restart:hover { color: #fff; border-color: #9ca3af; }
+    .q-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-top: 0.8rem; }
+    #prob-num { font-size: 0.8rem; font-weight: 700; color: #9ca3af; margin-left: 0.5rem; letter-spacing: 0.04em; }
+    #new-problem { display: none; background: #16a34a; color: #fff; border: 1.5px solid #4ade80; border-radius: 0.45rem; padding: 0.5rem 1rem;
+      font-weight: 800; font-size: 0.85rem; letter-spacing: 0.06em; cursor: pointer; animation: npGlow 1.6s ease-in-out infinite; }
+    #new-problem:hover { background: #22c55e; }
+    #new-problem.show { display: inline-block; }
+    @keyframes npGlow { 0%,100% { box-shadow: 0 0 6px rgba(74,222,128,0.5); } 50% { box-shadow: 0 0 18px 4px rgba(74,222,128,0.85); } }
     /* ---------- INSTRUCTIONS drawer (right edge) ---------- */
     #instr-wrap { position: fixed; right: 0; top: 50%; z-index: 30; display: flex; align-items: center; flex-direction: row-reverse;
       --iw: min(900px, calc(100vw - 44px));
@@ -229,6 +237,17 @@
     #open-info-modal { font-size: 0.78rem; padding: 0.3rem 0.75rem; color: #e5e7eb; position: fixed; bottom: 6px; right: 10px; z-index: 12; }
     #bottom-bar { padding-bottom: 2.4rem; }
     #toast { font-size: 1.05rem; }
+    /* keep the bottom panels on one row with the extra TIME-LAPSE button */
+    #bottom-bar > .glass-panel { padding: 0.6rem 0.85rem; gap: 0.75rem; }
+    #bottom-bar .btn { min-width: 0; padding: 0.55rem 0.95rem; }
+    #btn-play { min-width: 5.6rem !important; }
+    .legend-item { font-size: 1rem; }
+    #bottom-bar > .glass-panel:first-child { flex-direction: column; align-items: flex-start; gap: 0.3rem; padding: 0.45rem 0.85rem; }
+    #factor-label { font-size: 1rem; }
+    .frac { font-size: 0.86rem; }
+    .btn-lapse { background: #2563eb; } .btn-lapse:hover { background: #3b82f6; }
+    .btn-lapse.on { background: #60a5fa; color: #0b1e3f; animation: lapseGlow 0.6s ease-in-out infinite; }
+    @keyframes lapseGlow { 0%,100% { box-shadow: 0 0 4px rgba(59,130,246,0.5); } 50% { box-shadow: 0 0 16px 4px rgba(96,165,250,0.9); } }
     @media (max-width: 640px) {
       input[type=range] { width: 150px; }
       #bottom-bar > .glass-panel { padding: 0.45rem 0.7rem; }
@@ -247,7 +266,7 @@
       </div>
       <div class="cp-group">
         <span class="cp-label">Drug <span style="text-transform:none">pK<sub>a</sub></span>:</span>
-        <input type="range" id="pka-slider" min="5" max="8" step="0.01" value="8">
+        <input type="range" id="pka-slider" min="5" max="9" step="0.01" value="8">
         <span id="pka-value" class="cp-value">8.00</span>
       </div>
       <div class="cp-group">
@@ -269,39 +288,39 @@
 <div id="quiz-wrap">
   <div id="quiz-panel" class="glass-panel">
     <button class="q-close" id="q-close" title="Close">&times;</button>
-    <h2>Test Your Understanding</h2>
+    <h2>Test Your Understanding <span id="prob-num"></span></h2>
     <div class="q-cols"><div>
-    <p>To avoid lysosomal trapping of small molecules (which can lead to elevated toxicity), medicinal chemists often place fluorine near a basic amine to tune the pK<sub>a</sub> of a drug. Genentech chemists did exactly this with two closely related Met kinase inhibitor drug candidates (anticancer agents). They differ by one fluorine next to the basic piperidine nitrogen:</p>
+    <p id="prob-intro"></p>
 
     <div class="drug" id="drug-A" data-drug="A">
-      <div class="drug-name">GEN-203 <span>(one fluorine near the amine)</span></div>
+      <div class="drug-name"></div>
       <div class="rxn">
-        <span class="mol-slot" data-nf="1" data-acid="0"></span>
+        <span class="mol-b"></span>
         <div class="rxn-mid"><span>+ H⁺</span><span class="arrows">⇌</span></div>
-        <span class="mol-slot" data-nf="1" data-acid="1"></span>
-        <span class="pka-tag">pK<sub>a</sub> <span class="pka-hidden">= ?</span><span class="pka-val">≈ 7.5</span></span>
+        <span class="mol-a"></span>
+        <span class="pka-tag">pK<sub>a</sub> <span class="pka-hidden">= ?</span><span class="pka-val"></span></span>
       </div>
     </div>
 
     <div class="drug" id="drug-B" data-drug="B">
-      <div class="drug-name">GEN-890 <span>(two fluorines near the amine)</span></div>
+      <div class="drug-name"></div>
       <div class="rxn">
-        <span class="mol-slot" data-nf="2" data-acid="0"></span>
+        <span class="mol-b"></span>
         <div class="rxn-mid"><span>+ H⁺</span><span class="arrows">⇌</span></div>
-        <span class="mol-slot" data-nf="2" data-acid="1"></span>
-        <span class="pka-tag">pK<sub>a</sub> <span class="pka-hidden">= ?</span><span class="pka-val">≈ 5.5</span></span>
+        <span class="mol-a"></span>
+        <span class="pka-tag">pK<sub>a</sub> <span class="pka-hidden">= ?</span><span class="pka-val"></span></span>
       </div>
     </div>
-    <p style="font-size:0.75rem;color:#9ca3af">Neutral amines (<b class="cb">B:</b>) are shown in red; conjugate acids (<b class="cbh">BH⁺</b>), protonated on the piperidine nitrogen, are highlighted in blue.<span id="pka-hint"> The pK<sub>a</sub> values are revealed after Question 1.</span></p>
-    <p id="pka-note" style="font-size:0.75rem;color:#9ca3af">Structures: Charifson, P. S.; Walters, W. P. <i>J. Med. Chem.</i> <b>2014</b>, 57, 9701–9717 (Figure 11A).</p>
+    <p style="font-size:0.75rem;color:#9ca3af">Neutral amines (<b class="cb">B:</b>) are shown in red; conjugate acids (<b class="cbh">BH⁺</b>), <span id="prob-site"></span>, are highlighted in blue.<span id="pka-hint"> The pK<sub>a</sub> values are revealed after Question 1.</span></p>
+    <p id="pka-note" style="font-size:0.75rem;color:#9ca3af"></p>
 
     </div><div>
     <div id="q1" class="q-box active">
       <h3>Question 1</h3>
       <p>Which drug is the <b>weaker base</b>? In other words, which one has a lone pair that is less available to accept H⁺ and form <b class="cbh">BH⁺</b>?</p>
       <div class="q-opts">
-        <button class="q-opt" data-q="1" data-a="A">GEN-203 (one fluorine)</button>
-        <button class="q-opt" data-q="1" data-a="B">GEN-890 (two fluorines)</button>
+        <button class="q-opt" data-q="1" data-a="A"></button>
+        <button class="q-opt" data-q="1" data-a="B"></button>
       </div>
       <div class="feedback" id="fb1"></div>
     </div>
@@ -310,13 +329,16 @@
       <h3>Question 2</h3>
       <p>Which drug is more likely to <b>accumulate (become trapped) inside the lysosome</b>?</p>
       <div class="q-opts">
-        <button class="q-opt" data-q="2" data-a="A">GEN-203 (one fluorine)</button>
-        <button class="q-opt" data-q="2" data-a="B">GEN-890 (two fluorines)</button>
+        <button class="q-opt" data-q="2" data-a="A"></button>
+        <button class="q-opt" data-q="2" data-a="B"></button>
       </div>
       <div class="feedback" id="fb2"></div>
       <div id="test-prompt"></div>
     </div>
-    <button id="q-restart">↺ Start over</button>
+    <div class="q-actions">
+      <button id="q-restart">↺ Start over</button>
+      <button id="new-problem">SOLVE NEW PROBLEM ➜</button>
+    </div>
     </div></div>
   </div>
   <div id="quiz-tab">TEST YOUR UNDERSTANDING</div>
@@ -339,7 +361,7 @@
         <h3>How to use the simulation</h3>
         <ul>
           <li>Hover over (or tap) the <span class="chip green">CONTROLS</span> tab at the top to set the drug's <b>pK<sub>a</sub></b>, the <b>particle speed</b>, and the <b>number of particles</b>.</li>
-          <li><b>PLAY</b> starts or pauses the simulation; <b>RESET</b> moves every molecule back into the cytosol.</li>
+          <li><b>PLAY</b> starts or pauses the simulation; <b>⏩ TIME-LAPSE</b> jumps ahead to the final equilibrium; <b>RESET</b> moves every molecule back into the cytosol.</li>
           <li>The <b>Lysosomal Trapping Factor</b> compares the drug concentration inside the lysosome with that outside.</li>
         </ul>
         <h3>Explore</h3>
@@ -368,6 +390,7 @@
   </div>
   <div class="glass-panel">
     <button id="btn-play" class="btn btn-play">PLAY</button>
+    <button id="btn-lapse" class="btn btn-lapse" title="Fast-forward to equilibrium">⏩ TIME-LAPSE</button>
     <button id="btn-reset" class="btn btn-reset">RESET</button>
   </div>
   <div id="factor-panel" class="glass-panel">
@@ -444,6 +467,7 @@ const BUFFER = 10;
 const N_LIPIDS = 160;   // scaled with the radius so the bilayer stays tightly packed
 let numParticles = 300;   // set from the window size at start-up (same density as the original 300-particle box), then by the slider
 const PARTICLE_RADIUS = 5;
+const COLLIDE_FRAC = 0.5;
 
 const MEMBRANE_SPEED_FACTOR = 0.25;
 const VELOCITY_SIGMA = 1.0;
@@ -839,7 +863,9 @@ function handleParticleCollisions(particles, t, speedMultiplier) {
             const dx = p2.x - p1.x;
             const dy = p2.y - p1.y;
             const distSq = dx * dx + dy * dy;
-            const minDist = p1.radius + p2.radius;
+            // molecules may pass partly over one another (this is a 2-D view of a 3-D solution), so they only bounce at half their drawn size;
+            // this keeps the crowded lysosome close to ideal-solution behaviour
+            const minDist = (p1.radius + p2.radius) * COLLIDE_FRAC;
 
             if (distSq > 0 && distSq < minDist * minDist) {
               const dist = Math.sqrt(distSq);
@@ -951,6 +977,62 @@ function updateHH() {
   document.getElementById('hh-in').textContent = fmtPct(calcFIonized(pka, PH_LYSOSOME));
 }
 updateHH();
+// TIME-LAPSE: jumps the system ahead to its final equilibrium. Every molecule glides to an equilibrium position
+// (the inside/outside split predicted by Henderson–Hasselbalch), then normal motion resumes.
+const lapseBtn = document.getElementById('btn-lapse');
+let lapseAnim = null;   // { t0, dur } while molecules are gliding
+// equilibrium trapping factor: only B: crosses, so [B:] ends up equal on both sides
+function eqFactor(pk) { return (1 + Math.pow(10, pk - PH_LYSOSOME)) / (1 + Math.pow(10, pk - PH_CYTOSOL)); }
+// areas used for concentrations: the lumen inside the bilayer, and the cytosol outside it (within the walls)
+function areas() {
+  const aIn = Math.PI * (LYSO_RADIUS - HALF_THICKNESS) ** 2;
+  return [aIn, Math.max(1, (WORLD_W - 30) * (WORLD_H - 30) - Math.PI * (LYSO_RADIUS + HALF_THICKNESS) ** 2)];
+}
+function randomInside() {
+  const r = (LYSO_RADIUS - HALF_THICKNESS - BUFFER - 6) * Math.sqrt(Math.random()), a = Math.random() * Math.PI * 2;
+  return [LYSO_CENTER.x + r * Math.cos(a), LYSO_CENTER.y + r * Math.sin(a)];
+}
+function randomOutside() {
+  for (;;) {
+    const x = 25 + Math.random() * (WORLD_W - 50), y = 25 + Math.random() * (WORLD_H - 50);
+    const dx = x - LYSO_CENTER.x, dy = y - LYSO_CENTER.y;
+    if (Math.hypot(dx, dy) > getMembraneBoundaries(Math.atan2(dy, dx), simTime)[1] + BUFFER + 4) return [x, y];
+  }
+}
+lapseBtn.addEventListener('click', () => {
+  if (lapseAnim) return;
+  const K = eqFactor(pka), [aIn, aOut] = areas();
+  const nIn = Math.round(particles.length * K * aIn / (K * aIn + aOut));
+  // the molecules closest to the lysosome are the ones that end up inside
+  const order = particles.slice().sort((p, q) => Math.hypot(p.x - LYSO_CENTER.x, p.y - LYSO_CENTER.y) - Math.hypot(q.x - LYSO_CENTER.x, q.y - LYSO_CENTER.y));
+  order.forEach((p, k) => {
+    const [tx, ty] = k < nIn ? randomInside() : randomOutside();
+    p.ox = p.x; p.oy = p.y; p.tx = tx; p.ty = ty; p.goIn = k < nIn;
+  });
+  lapseAnim = { t0: performance.now(), dur: 1400 };
+  lapseBtn.classList.add('on');
+  showToast('⏩ Time-lapse: jumping ahead to equilibrium.');
+});
+function stepLapseAnim(now) {
+  const u = Math.min(1, (now - lapseAnim.t0) / lapseAnim.dur), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+  for (const p of particles) {
+    if (p.tx === undefined) continue;
+    p.x = p.ox + (p.tx - p.ox) * e; p.y = p.oy + (p.ty - p.oy) * e;
+    p.tumble(0.15);
+  }
+  if (u >= 1) {
+    for (const p of particles) {
+      if (p.tx === undefined) continue;
+      p.compartment = p.goIn ? 'inside' : 'outside';
+      p.updateState(pka, simTime, true);
+      delete p.tx; delete p.ty; delete p.ox; delete p.oy; delete p.goIn;
+    }
+    lapseAnim = null; lapseBtn.classList.remove('on');
+    ratioSamples = []; lastUpdateTime = simTime; displayedTrappingRatio = 0;
+    if (paused) { paused = false; refreshPlayButton(); }
+  }
+}
+
 pkaSlider.addEventListener('input', () => {
   pka = parseFloat(parseFloat(pkaSlider.value).toFixed(2));
   pkaValue.textContent = pka.toFixed(2);
@@ -986,6 +1068,7 @@ function refreshPlayButton() {
 playBtn.addEventListener('click', () => { paused = !paused; refreshPlayButton(); });
 
 resetBtn.addEventListener('click', () => {
+  lapseAnim = null; lapseBtn.classList.remove('on');
   particles = generateOutsideParticles(pka);
   simTime = 0.0;
   paused = true;
@@ -996,21 +1079,19 @@ resetBtn.addEventListener('click', () => {
 });
 
 // ---------- TEST YOUR UNDERSTANDING ----------
-// Full skeletal structures of the Met kinase inhibitors GEN-203 (nF = 1) and GEN-890 (nF = 2),
-// drawn after Charifson & Walters, J. Med. Chem. 2014, Figure 11A. Bond length = 1 unit; y points down.
-function molSVG(nF, acid) {
-  const L = 22, col = acid ? '#93c5fd' : '#f87171';
-  const P = (a, r = 1) => [r * Math.cos(a * Math.PI / 180), r * Math.sin(a * Math.PI / 180)];
-  const add = (p, q) => [p[0] + q[0], p[1] + q[1]];
+// ---------- Skeletal-structure drawing ----------
+// Coordinates are in bond lengths (y points down). Bond types: s single, d double (inner line toward ring centre),
+// D symmetric double, T triple, h hashed wedge (narrow end at the first atom).
+const P = (a, r = 1) => [r * Math.cos(a * Math.PI / 180), r * Math.sin(a * Math.PI / 180)];
+const add = (p, q) => [p[0] + q[0], p[1] + q[1]];
+
+// GEN-203 (nF = 1) and GEN-890 (nF = 2), after Charifson & Walters, J. Med. Chem. 2014, Figure 11A
+function molGEN(nF) {
   const A = {};
-  // N-ethylpiperidine (N1 at the left vertex)
   A.N1 = [-1, 0]; A.C2 = [-0.5, -0.866]; A.C3 = [0.5, -0.866]; A.C4 = [1, 0]; A.C5 = [0.5, 0.866]; A.C6 = [-0.5, 0.866];
-  const PIP = [0, 0];
   A.Ea = add(A.N1, P(210)); A.Eb = add(A.Ea, P(150));
   if (nF === 1) A.F1 = add(A.C3, P(300));
   else { A.F1 = add(A.C3, P(270)); A.F2 = add(A.C3, P(330)); }
-  if (acid) A.HN = add(A.N1, P(150, 0.85));
-  // 4-NH linking to C3 of the 1H-pyrazolo[3,4-b]pyridine
   A.NH = add(A.C4, P(12));
   A.Pz3 = add(A.NH, [0.309, 0.951]);
   A.Pz3a = add(A.Pz3, [0.951, 0.309]);
@@ -1019,12 +1100,10 @@ function molSVG(nF, acid) {
   const Q = add(A.Pz3a, [0.866, 0.5]);
   A.Py4 = add(Q, P(270)); A.Py5 = add(Q, P(330)); A.Py6 = add(Q, P(30)); A.Py7 = add(Q, P(90)); A.Py7a = add(Q, P(150));
   const PZ = [0, 0]; ['Pz3', 'Pz3a', 'Pz2', 'Pz1', 'Py7a'].forEach(k => { PZ[0] += A[k][0] / 5; PZ[1] += A[k][1] / 5; });
-  // aryl ether: 2-fluoro-4-amidophenyl
   A.O1 = add(A.Py4, P(270)); A.Ar1 = add(A.O1, P(330));
   const R = add(A.Ar1, P(330));
   A.Ar2 = add(R, P(210)); A.Ar3 = add(R, P(270)); A.Ar4 = add(R, P(330)); A.Ar5 = add(R, P(30)); A.Ar6 = add(R, P(90));
   A.F3 = add(A.Ar2, P(210));
-  // amide and 2-(4-fluorophenyl)-3-oxopyridazine
   A.Nam = add(A.Ar4, P(330)); A.Cam = add(A.Nam, P(30)); A.Oam = add(A.Cam, P(90)); A.Pd4 = add(A.Cam, P(330));
   const S = add(A.Pd4, P(330));
   A.Pd5 = add(S, P(210)); A.Pd6 = add(S, P(270)); A.Pd1 = add(S, P(330)); A.Pd2 = add(S, P(30)); A.Pd3 = add(S, P(90));
@@ -1033,12 +1112,8 @@ function molSVG(nF, acid) {
   const T = add(A.Fp1, P(30));
   A.Fp2 = add(T, P(270)); A.Fp3 = add(T, P(330)); A.Fp4 = add(T, P(30)); A.Fp5 = add(T, P(90)); A.Fp6 = add(T, P(150));
   A.F4 = add(A.Fp4, P(30));
-
-  // atom labels: [text, attached-H offset or null]
-  const LB = { N1: ['N'], F1: ['F'], F2: ['F'], HN: ['H'], NH: ['N', [0.52, 0]], Pz2: ['N'], Pz1: ['N', [0, 0.6]], Py7: ['N'],
+  const LB = { N1: ['N'], F1: ['F'], F2: ['F'], NH: ['N', [0.52, 0]], Pz2: ['N'], Pz1: ['N', [0, 0.6]], Py7: ['N'],
                O1: ['O'], F3: ['F'], Nam: ['N', [0, -0.6]], Oam: ['O'], Pd1: ['N'], Pd2: ['N'], Opd: ['O'], F4: ['F'] };
-
-  // bonds: [a, b, type, ringCentre]  type: s single, d double (inner line toward ringCentre), D symmetric double, h hashed wedge (narrow at a)
   const B = [
     ['N1', 'C2', 's'], ['C2', 'C3', 's'], ['C3', 'C4', 's'], ['C4', 'C5', 's'], ['C5', 'C6', 's'], ['C6', 'N1', 's'],
     ['N1', 'Ea', 's'], ['Ea', 'Eb', 's'], ['C3', 'F1', nF === 1 ? 'h' : 's'], ['C4', 'NH', 'h'], ['NH', 'Pz3', 's'],
@@ -1053,8 +1128,98 @@ function molSVG(nF, acid) {
     ['Fp4', 'F4', 's']
   ];
   if (nF === 2) B.push(['C3', 'F2', 's']);
-  if (acid) B.push(['N1', 'HN', 's']);
+  return { A, LB, B, N: 'N1', hAng: 150, plusAng: 100, lpAng: 150 };
+}
 
+// Cathepsin C inhibitors (amidoacetonitriles with a 4'-cyanobiphenyl), Charifson & Walters, J. Med. Chem. 2014, Figure 11C:
+// v = 1 (S)-piperidine-2-carboxamide (pKa 8.4), v = 2 4-amino-tetrahydropyran-4-carboxamide (pKa 5.8)
+function molCTC(v) {
+  const A = {};
+  for (let k = 0; k < 6; k++) A['R' + k] = P(30 + 60 * k);   // R0 bears the amide, R1 is below it, R3 is opposite R0
+  A.Cam = add(A.R0, P(30)); A.Oam = add(A.Cam, P(90)); A.Nam = add(A.Cam, P(330));
+  A.Ca = add(A.Nam, P(30)); A.Cn = add(A.Ca, P(330)); A.Nn = add(A.Cn, P(330));
+  A.Cb = add(A.Ca, P(90));
+  const R1c = add(A.Cb, P(30, 2));
+  for (let k = 0; k < 6; k++) A['Ba' + k] = add(R1c, P(210 + 60 * k));   // Ba0 ipso, Ba3 para
+  const R2c = add(A.Ba3, P(30, 2));
+  for (let k = 0; k < 6; k++) A['Bb' + k] = add(R2c, P(210 + 60 * k));
+  A.Cn2 = add(A.Bb3, P(30)); A.Nn2 = add(A.Cn2, P(30));
+  const LB = { Oam: ['O'], Nam: ['N', [0, -0.6]], Nn: ['N'], Nn2: ['N'] };
+  const B = [
+    ['R0', 'R1', 's'], ['R1', 'R2', 's'], ['R2', 'R3', 's'], ['R3', 'R4', 's'], ['R4', 'R5', 's'], ['R5', 'R0', 's'],
+    ['Cam', 'Oam', 'D'], ['Cam', 'Nam', 's'], ['Nam', 'Ca', 's'], ['Ca', 'Cn', 's'], ['Cn', 'Nn', 'T'], ['Ca', 'Cb', 'h'], ['Cb', 'Ba0', 's'],
+    ['Ba3', 'Bb0', 's'], ['Bb3', 'Cn2', 's'], ['Cn2', 'Nn2', 'T']
+  ];
+  for (let k = 0; k < 6; k++) {
+    B.push(['Ba' + k, 'Ba' + ((k + 1) % 6), k % 2 === 0 ? 's' : 'd', R1c]);
+    B.push(['Bb' + k, 'Bb' + ((k + 1) % 6), k % 2 === 0 ? 's' : 'd', R2c]);
+  }
+  if (v === 1) {
+    // (S)-piperidine: NH is R1, wedge from the stereocentre R0 to the amide carbon
+    A.Nb = A.R1; LB.Nb = ['N', [0, 0.6]];
+    B.splice(B.findIndex(b => b[0] === 'R0' && b[1] === 'R1'), 1, ['R0', 'Nb', 's']);
+    B.splice(B.findIndex(b => b[0] === 'R1' && b[1] === 'R2'), 1, ['Nb', 'R2', 's']);
+    delete A.R1;
+    B.push(['R0', 'Cam', 'w']);
+    return { A, LB, B, N: 'Nb', hAng: 150, plusAng: 28, lpAng: 150 };
+  }
+  // tetrahydropyran: ring O opposite the quaternary carbon, NH2 on the quaternary carbon
+  A.Or = A.R3; LB.Or = ['O'];
+  B.splice(B.findIndex(b => b[0] === 'R2' && b[1] === 'R3'), 1, ['R2', 'Or', 's']);
+  B.splice(B.findIndex(b => b[0] === 'R3' && b[1] === 'R4'), 1, ['Or', 'R4', 's']);
+  delete A.R3;
+  A.Nb = add(A.R0, P(90)); LB.Nb = ['H₂N', null, { anchor: 'end', dx: 0.3, w: 1.3 }];
+  B.push(['R0', 'Cam', 's'], ['R0', 'Nb', 's']);
+  return { A, LB, B, N: 'Nb', lpAng: 75, plusAng: 330, plusR: 0.5,
+           acidLB: { Nb: ['H₃N', null, { anchor: 'end', dx: 0.3, w: 1.3 }] } };
+}
+
+// EGFR kinase inhibitors with a 4-anilinoquinazoline core: gefitinib (v = 'gef', basic morpholine) and erlotinib (v = 'erl')
+function molEGFR(v) {
+  const A = {};
+  const Qb = [0, 0], Qp = [1.732, 0];   // benzo ring (left) and pyrimidine ring (right) of the quinazoline
+  A.C4a = P(330); A.C8a = P(30); A.C5 = P(270); A.C6 = P(210); A.C7 = P(150); A.C8 = P(90);
+  A.C4 = add(Qp, P(270)); A.N3 = add(Qp, P(330)); A.C2 = add(Qp, P(30)); A.N1 = add(Qp, P(90));
+  // 4-NH-aryl
+  A.Nh = add(A.C4, P(270)); A.Ar0 = add(A.Nh, P(330));
+  const Ar = add(A.Ar0, P(330));
+  for (let k = 1; k < 6; k++) A['Ar' + k] = add(Ar, P(150 + 60 * k));   // Ar0 ipso (150), Ar3 para (330), Ar4 meta (30)
+  // 6- and 7-alkoxy groups
+  A.O6 = add(A.C6, P(210)); A.O7 = add(A.C7, P(150));
+  const LB = { N1: ['N'], N3: ['N'], Nh: ['N', [-0.55, 0]], O6: ['O'], O7: ['O'] };
+  const B = [
+    ['C4a', 'C4', 's'], ['C4', 'N3', 'd', Qp], ['N3', 'C2', 's'], ['C2', 'N1', 'd', Qp], ['N1', 'C8a', 's'], ['C8a', 'C4a', 'd', Qb],
+    ['C4a', 'C5', 's'], ['C5', 'C6', 'd', Qb], ['C6', 'C7', 's'], ['C7', 'C8', 'd', Qb], ['C8', 'C8a', 's'],
+    ['C4', 'Nh', 's'], ['Nh', 'Ar0', 's'], ['C6', 'O6', 's'], ['C7', 'O7', 's']
+  ];
+  for (let k = 0; k < 6; k++) B.push(['Ar' + k, 'Ar' + ((k + 1) % 6), k % 2 === 0 ? 'd' : 's', Ar]);
+  if (v === 'gef') {
+    // 3-chloro-4-fluoroanilino; 7-OMe; 6-(3-morpholinopropoxy)
+    A.F = add(A.Ar3, P(330)); A.Cl = add(A.Ar4, P(30)); LB.F = ['F']; LB.Cl = ['Cl'];
+    A.Me7 = add(A.O7, P(210));
+    A.Ca = add(A.O6, P(210)); A.Cb = add(A.Ca, P(150)); A.Cc = add(A.Cb, P(210)); A.Nb = add(A.Cc, P(150));
+    const Mc = add(A.Nb, P(150));
+    A.M2 = add(Mc, P(30)); A.M3 = add(Mc, P(90)); A.Om = add(Mc, P(150)); A.M5 = add(Mc, P(210)); A.M6 = add(Mc, P(270));
+    LB.Nb = ['N']; LB.Om = ['O'];
+    B.push(['Ar3', 'F', 's'], ['Ar4', 'Cl', 's'], ['O7', 'Me7', 's'], ['O6', 'Ca', 's'], ['Ca', 'Cb', 's'], ['Cb', 'Cc', 's'], ['Cc', 'Nb', 's'],
+           ['Nb', 'M2', 's'], ['M2', 'M3', 's'], ['M3', 'Om', 's'], ['Om', 'M5', 's'], ['M5', 'M6', 's'], ['M6', 'Nb', 's']);
+    return { A, LB, B, N: 'Nb', hAng: 270, plusAng: 18, lpAng: 270 };
+  }
+  // erlotinib: 3-ethynylanilino; 6,7-bis(2-methoxyethoxy); most basic site = quinazoline N1
+  A.Ce1 = add(A.Ar4, P(30)); A.Ce2 = add(A.Ce1, P(30));
+  A.Ca = add(A.O6, P(210)); A.Cb = add(A.Ca, P(150)); A.Ob = add(A.Cb, P(210)); A.Mb = add(A.Ob, P(150));
+  A.Da = add(A.O7, P(210)); A.Db = add(A.Da, P(150)); A.Od = add(A.Db, P(210)); A.Md = add(A.Od, P(150));
+  LB.Ob = ['O']; LB.Od = ['O'];
+  B.push(['Ar4', 'Ce1', 's'], ['Ce1', 'Ce2', 'T'], ['O6', 'Ca', 's'], ['Ca', 'Cb', 's'], ['Cb', 'Ob', 's'], ['Ob', 'Mb', 's'],
+         ['O7', 'Da', 's'], ['Da', 'Db', 's'], ['Db', 'Od', 's'], ['Od', 'Md', 's']);
+  return { A, LB, B, N: 'N1', hAng: 90, plusAng: 30, lpAng: 90 };
+}
+
+function renderMol(m, acid) {
+  const L = 22, col = acid ? '#93c5fd' : '#f87171';
+  const A = Object.assign({}, m.A), LB = Object.assign({}, m.LB), B = m.B.slice();
+  if (acid && m.acidLB) Object.assign(LB, m.acidLB);
+  else if (acid) { A.HN = add(A[m.N], P(m.hAng, 0.85)); LB.HN = ['H']; B.push([m.N, 'HN', 's']); }
   const f = v => (v * L).toFixed(1);
   const line = (x1, y1, x2, y2) => `<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}"/>`;
   let s = '', hs = '';
@@ -1063,15 +1228,19 @@ function molSVG(nF, acid) {
     const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
     const ta = LB[a] ? 0.3 : 0, tb = LB[b] ? 0.3 : 0;
     x1 += ux * ta; y1 += uy * ta; x2 -= ux * tb; y2 -= uy * tb;
-    if (type === 'h') {   // hashed wedge: bars widen from a to b
+    if (type === 'w') {   // solid wedge, narrow at the first atom
+      const w = 0.17;
+      s += `<polygon points="${f(x1)},${f(y1)} ${f(x2 + nx * w)},${f(y2 + ny * w)} ${f(x2 - nx * w)},${f(y2 - ny * w)}" fill="${col}" stroke-linejoin="round"/>`;
+    } else if (type === 'h') {
       const n = 7;
       for (let k = 0; k < n; k++) {
         const u = (k + 0.5) / n, w = 0.03 + 0.15 * u, cx = x1 + (x2 - x1) * u, cy = y1 + (y2 - y1) * u;
         hs += line(cx - nx * w, cy - ny * w, cx + nx * w, cy + ny * w);
       }
-    } else if (type === 'D') {
-      const o = 0.085;
+    } else if (type === 'D' || type === 'T') {
+      const o = type === 'D' ? 0.085 : 0.12;
       s += line(x1 + nx * o, y1 + ny * o, x2 + nx * o, y2 + ny * o) + line(x1 - nx * o, y1 - ny * o, x2 - nx * o, y2 - ny * o);
+      if (type === 'T') s += line(x1, y1, x2, y2);
     } else {
       s += line(x1, y1, x2, y2);
       if (type === 'd') {
@@ -1083,25 +1252,31 @@ function molSVG(nF, acid) {
     }
   }
   let t = '';
+  let x0 = 1e9, y0 = 1e9, xm = -1e9, ym = -1e9;
+  const grow = (x, y) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); xm = Math.max(xm, x); ym = Math.max(ym, y); };
+  for (const k in A) grow(A[k][0], A[k][1]);
   for (const k in LB) {
     if (!A[k]) continue;
-    const [txt, h] = LB[k];
+    const [txt, h, o] = LB[k];
+    if (o) {
+      t += `<text x="${f(A[k][0] + o.dx)}" y="${f(A[k][1])}" text-anchor="${o.anchor}">${txt}</text>`;
+      grow(A[k][0] + o.dx - o.w, A[k][1]);
+      continue;
+    }
     t += `<text x="${f(A[k][0])}" y="${f(A[k][1])}">${txt}</text>`;
-    if (h) t += `<text x="${f(A[k][0] + h[0])}" y="${f(A[k][1] + h[1])}">H</text>`;
+    if (h) { t += `<text x="${f(A[k][0] + h[0])}" y="${f(A[k][1] + h[1])}">H</text>`; grow(A[k][0] + h[0], A[k][1] + h[1]); }
   }
+  const Nb = A[m.N];
   if (acid) {
-    const c = add(A.N1, P(100, 0.62));
+    const c = add(Nb, P(m.plusAng, m.plusR || 0.62));
     t += `<text x="${f(c[0])}" y="${f(c[1])}" style="font-size:${(0.5 * L).toFixed(1)}px">+</text>`;
-  } else {   // lone pair on the basic piperidine nitrogen
-    const c = add(A.N1, P(150, 0.5)), d = P(60, 0.13);
+  } else {   // lone pair on the basic nitrogen
+    const c = add(Nb, P(m.lpAng, 0.5)), d = P(m.lpAng + 90, 0.13);
+    grow(c[0], c[1] + 0.1); grow(c[0], c[1] - 0.1);   // keep the lone pair inside the drawing area
     t += `<circle cx="${f(c[0] + d[0])}" cy="${f(c[1] + d[1])}" r="1.5"/><circle cx="${f(c[0] - d[0])}" cy="${f(c[1] - d[1])}" r="1.5"/>`;
   }
-  // bounding box
-  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-  for (const k in A) { x0 = Math.min(x0, A[k][0]); y0 = Math.min(y0, A[k][1]); x1 = Math.max(x1, A[k][0]); y1 = Math.max(y1, A[k][1]); }
-  y1 = Math.max(y1, A.Pz1[1] + 0.6);
   const pad = 0.45;
-  const vb = [x0 - pad, y0 - pad - 0.15, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad + 0.15].map(f).join(' ');
+  const vb = [x0 - pad, y0 - pad - 0.15, xm - x0 + 2 * pad, ym - y0 + 2 * pad + 0.15].map(f).join(' ');
   return `<svg class="${acid ? 'mol-acid' : 'mol-base'}" viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" role="img"
       aria-label="${acid ? 'conjugate acid (BH+)' : 'neutral amine (B:)'}">
     <g stroke="${col}" stroke-width="1.6" stroke-linecap="round">${s}</g>
@@ -1109,14 +1284,94 @@ function molSVG(nF, acid) {
     <g fill="${col}" stroke="none" font-family="ui-sans-serif, system-ui, Arial, sans-serif" font-weight="700" font-size="${(0.62 * L).toFixed(1)}px"
        text-anchor="middle" dominant-baseline="central">${t}</g></svg>`;
 }
-document.querySelectorAll('.mol-slot').forEach(el => { el.outerHTML = molSVG(+el.dataset.nf, el.dataset.acid === '1'); });
 
-const DRUGS = { A: { pka: 7.5, name: 'GEN-203' }, B: { pka: 5.5, name: 'GEN-890' } };
-const CORRECT = { 1: 'B', 2: 'A' };
+// ---------- TEST YOUR UNDERSTANDING problems ----------
+const B_ = '<b class="cb">B:</b>', BH_ = '<b class="cbh">BH⁺</b>';
+const PROBLEMS = [
+  {
+    intro: 'To avoid lysosomal trapping of small molecules (which can lead to elevated toxicity), medicinal chemists often place fluorine near a basic amine to tune the pK<sub>a</sub> of a drug. Genentech chemists did exactly this with two closely related Met kinase inhibitor drug candidates (anticancer agents). They differ by one fluorine next to the basic piperidine nitrogen:',
+    site: 'protonated on the piperidine nitrogen',
+    source: 'Structures: Charifson, P. S.; Walters, W. P. <i>J. Med. Chem.</i> <b>2014</b>, 57, 9701–9717 (Figure 11A).',
+    correct: { 1: 'B', 2: 'A' },
+    drugs: {
+      A: { name: 'GEN-203', sub: '(one fluorine near the amine)', btn: 'GEN-203 (one fluorine)', pka: 7.5, mol: molGEN(1) },
+      B: { name: 'GEN-890', sub: '(two fluorines near the amine)', btn: 'GEN-890 (two fluorines)', pka: 5.5, mol: molGEN(2) }
+    },
+    feedback: {
+      1: {
+        B: `<b>Correct.</b> Fluorine pulls electron density away from the nitrogen by induction, so its lone pair is less available to accept H⁺. With two fluorines, GEN-890 is the weaker base: its ${BH_} has the lower pK<sub>a</sub> (≈ 5.5 vs ≈ 7.5).`,
+        A: `<b>Not quite.</b> Fluorine pulls electron density away from the nitrogen by induction, so each fluorine makes the lone pair <i>less</i> available to accept H⁺. <b>GEN-890</b> (two fluorines) is the weaker base: its ${BH_} has the lower pK<sub>a</sub> (≈ 5.5 vs ≈ 7.5).`
+      },
+      2: {
+        A: `<b>Correct.</b> Both drugs can cross the membrane in their neutral form (${B_}). At pH 5.0, GEN-203 (pK<sub>a</sub> ≈ 7.5) is over 99% ${BH_} and stays trapped, while about a quarter of GEN-890 (pK<sub>a</sub> ≈ 5.5) is still neutral and can leak back out.`,
+        B: `<b>Not quite.</b> At pH 5.0, about a quarter of GEN-890 (pK<sub>a</sub> ≈ 5.5) is still neutral and can leak back out of the lysosome. <b>GEN-203</b> (pK<sub>a</sub> ≈ 7.5) is over 99% ${BH_} at pH 5.0, and ${BH_} cannot cross the membrane, so it accumulates far more.`
+      }
+    }
+  },
+  {
+    intro: 'Cathepsin C is an enzyme that works inside lysosomes. An early cathepsin C inhibitor with a basic piperidine caused <b>phospholipidosis</b> in animals: lipophilic basic drugs trapped in lysosomes make fatty material build up there, which led to liver changes. Chemists replaced the piperidine with a 4-aminotetrahydropyran and kept the rest of the molecule the same:',
+    site: 'protonated on the amine nitrogen',
+    source: 'Structures and pK<sub>a</sub> values: Charifson, P. S.; Walters, W. P. <i>J. Med. Chem.</i> <b>2014</b>, 57, 9701–9717 (Figure 11C and Table 4).',
+    correct: { 1: 'B', 2: 'A' },
+    drugs: {
+      A: { name: 'Inhibitor 1', sub: '(piperidine)', btn: 'Inhibitor 1 (piperidine)', pka: 8.4, mol: molCTC(1) },
+      B: { name: 'Inhibitor 2', sub: '(aminotetrahydropyran)', btn: 'Inhibitor 2 (tetrahydropyran)', pka: 5.8, mol: molCTC(2) }
+    },
+    feedback: {
+      1: {
+        B: `<b>Correct.</b> Both amines sit next to the electron-withdrawing amide carbonyl. In inhibitor 2, the electronegative ring oxygen of the tetrahydropyran pulls more electron density away by induction. Its amine also sits on a crowded, fully substituted carbon, where the ${BH_} ion is less well stabilized by water. Inhibitor 2 is the weaker base: its ${BH_} has the lower pK<sub>a</sub> (≈ 5.8 vs ≈ 8.4).`,
+        A: `<b>Not quite.</b> Both amines sit next to the amide carbonyl, but in <b>inhibitor 2</b> the electronegative oxygen in the tetrahydropyran ring pulls extra electron density away by induction, and its crowded amine forms a less well stabilized ${BH_}. Inhibitor 2 is the weaker base: its ${BH_} has the lower pK<sub>a</sub> (≈ 5.8 vs ≈ 8.4).`
+      },
+      2: {
+        A: `<b>Correct.</b> At pH 5.0, inhibitor 1 (pK<sub>a</sub> ≈ 8.4) is over 99.9% ${BH_} and stays trapped, while about 14% of inhibitor 2 (pK<sub>a</sub> ≈ 5.8) is still neutral (${B_}) and can leak back out. Consistent with this, inhibitor 2 showed low activity in phospholipidosis assays.`,
+        B: `<b>Not quite.</b> At pH 5.0, about 14% of inhibitor 2 (pK<sub>a</sub> ≈ 5.8) is still neutral (${B_}) and can leak back out of the lysosome. <b>Inhibitor 1</b> (pK<sub>a</sub> ≈ 8.4) is over 99.9% ${BH_} at pH 5.0 and stays trapped, which is why it caused phospholipidosis.`
+      }
+    }
+  },
+  {
+    pkaUpfront: true,   // pKa values are shown from the start for this problem
+    intro: 'Gefitinib (Iressa) and erlotinib (Tarceva) are closely related EGFR kinase inhibitors used to treat lung cancer. Both are built on the same 4-anilinoquinazoline core, but gefitinib also carries a morpholine side chain. Drugs like these can be sequestered in lysosomes, which lowers how much of the drug reaches its target inside cancer cells:',
+    site: 'protonated on the most basic nitrogen (the morpholine N in gefitinib, the quinazoline N1 in erlotinib)',
+    source: 'pK<sub>a</sub> values: U.S. prescribing information for Iressa (gefitinib: 7.2 for the morpholine, 5.4 for the quinazoline) and Tarceva (erlotinib: 5.42).',
+    correct: { 1: 'B', 2: 'A' },
+    drugs: {
+      A: { name: 'Gefitinib', sub: '(morpholine side chain)', btn: 'Gefitinib', pka: 7.2, mol: molEGFR('gef') },
+      B: { name: 'Erlotinib', sub: '(no aliphatic amine)', btn: 'Erlotinib', pka: 5.4, mol: molEGFR('erl') }
+    },
+    feedback: {
+      1: {
+        B: `<b>Correct.</b> Erlotinib has no aliphatic amine. Its most basic site is a ring nitrogen of the quinazoline: that lone pair sits in an sp² orbital (held closer to the nucleus) on an electron-poor aromatic ring, so it accepts H⁺ only weakly (pK<sub>a</sub> ≈ 5.4). Gefitinib's morpholine nitrogen is an sp³ amine; its ring oxygen makes it less basic than a typical amine, but it is still the stronger base (pK<sub>a</sub> ≈ 7.2).`,
+        A: `<b>Not quite.</b> Gefitinib's morpholine nitrogen is an sp³ amine (pK<sub>a</sub> ≈ 7.2). <b>Erlotinib</b> has no aliphatic amine: its most basic site is a quinazoline ring nitrogen whose sp² lone pair is part of an electron-poor aromatic ring, so it is the weaker base (pK<sub>a</sub> ≈ 5.4).`
+      },
+      2: {
+        A: `<b>Correct.</b> About 40% of gefitinib (pK<sub>a</sub> ≈ 7.2) is neutral at pH 7, so it crosses into the lysosome readily, and at pH 5.0 over 99% of it becomes ${BH_} and is trapped. Erlotinib (pK<sub>a</sub> ≈ 5.4) is still about 30% neutral (${B_}) at pH 5.0, so much of it leaks back out.`,
+        B: `<b>Not quite.</b> Erlotinib (pK<sub>a</sub> ≈ 5.4) is still about 30% neutral (${B_}) at pH 5.0, so much of it leaks back out of the lysosome. <b>Gefitinib</b> (pK<sub>a</sub> ≈ 7.2) is over 99% ${BH_} at pH 5.0 and stays trapped, so it accumulates far more.`
+      }
+    }
+  }
+];
+// The problems come in a random order, and each one randomly decides which drug is shown first (top row / left button),
+// so the correct answers do not always sit in the same place.
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const probSeq = shuffle(PROBLEMS.map((_, i) => i));
+const probSwap = PROBLEMS.map(() => Math.random() < 0.5);
+if (probSwap.every(x => x === probSwap[0])) probSwap[Math.floor(Math.random() * probSwap.length)] = !probSwap[0];   // mix positions across the set
+function viewOf(pr, swap) {
+  const m = swap ? { A: 'B', B: 'A' } : { A: 'A', B: 'B' };   // shown slot <-> data key (a swap is its own inverse)
+  return Object.assign({}, pr, {
+    drugs: { A: pr.drugs[m.A], B: pr.drugs[m.B] },
+    correct: { 1: m[pr.correct[1]], 2: m[pr.correct[2]] },
+    feedback: { 1: { A: pr.feedback[1][m.A], B: pr.feedback[1][m.B] }, 2: { A: pr.feedback[2][m.A], B: pr.feedback[2][m.B] } }
+  });
+}
+let probIdx = 0, curProb = null;
+const PROB = () => curProb;
+
 const quizWrap = document.getElementById('quiz-wrap');
 const quizPanel = document.getElementById('quiz-panel');
 const instrWrap = document.getElementById('instr-wrap');
 const testPrompt = document.getElementById('test-prompt');
+const newProbBtn = document.getElementById('new-problem');
 let q2Choice = null;
 
 // Only one drawer at a time; the other drawer's tab hides while one is open
@@ -1131,26 +1386,51 @@ document.getElementById('q-close').addEventListener('click', () => quizWrap.clas
 document.getElementById('instr-tab').addEventListener('click', () => { instrWrap.classList.toggle('open'); quizWrap.classList.remove('open'); });
 document.getElementById('i-close').addEventListener('click', () => instrWrap.classList.remove('open'));
 
-const FEEDBACK = {
-  1: {
-    B: '<b>Correct.</b> Fluorine pulls electron density away from the nitrogen by induction, so its lone pair is less available to accept H⁺. With two fluorines, GEN-890 is the weaker base: its <b class="cbh">BH⁺</b> has the lower pK<sub>a</sub> (≈ 5.5 vs ≈ 7.5).',
-    A: '<b>Not quite.</b> Fluorine pulls electron density away from the nitrogen by induction, so each fluorine makes the lone pair <i>less</i> available to accept H⁺. <b>GEN-890</b> (two fluorines) is the weaker base: its <b class="cbh">BH⁺</b> has the lower pK<sub>a</sub> (≈ 5.5 vs ≈ 7.5).'
-  },
-  2: {
-    A: '<b>Correct.</b> Both drugs can cross the membrane in their neutral form (<b class="cb">B:</b>). At pH 5.0, GEN-203 (pK<sub>a</sub> ≈ 7.5) is over 99% <b class="cbh">BH⁺</b> and stays trapped, while about a quarter of GEN-890 (pK<sub>a</sub> ≈ 5.5) is still neutral and can leak back out.',
-    B: '<b>Not quite.</b> At pH 5.0, about a quarter of GEN-890 (pK<sub>a</sub> ≈ 5.5) is still neutral and can leak back out of the lysosome. <b>GEN-203</b> (pK<sub>a</sub> ≈ 7.5) is over 99% <b class="cbh">BH⁺</b> at pH 5.0, and <b class="cbh">BH⁺</b> cannot cross the membrane, so it accumulates far more.'
+function resetQuestions() {
+  document.querySelectorAll('.q-opt').forEach(b => { b.disabled = false; b.classList.remove('right', 'wrong'); });
+  document.querySelectorAll('.feedback').forEach(f => { f.className = 'feedback'; f.innerHTML = ''; });
+  document.querySelectorAll('.drug').forEach(d => d.classList.remove('clickable', 'chosen'));
+  document.getElementById('q2').classList.add('locked');
+  document.querySelectorAll('.q-box').forEach(b => b.classList.remove('active', 'done'));
+  document.getElementById('q1').classList.add('active');
+  testPrompt.style.display = 'none';
+  newProbBtn.classList.remove('show');
+  q2Choice = null;
+  quizPanel.classList.remove('pka-shown');
+  quizPanel.scrollTop = 0;
+}
+
+let testedThisProblem = false;
+function loadProblem(i) {
+  probIdx = i;
+  testedThisProblem = false;
+  curProb = viewOf(PROBLEMS[probSeq[i]], probSwap[i]);
+  const pr = PROB();
+  document.getElementById('prob-num').textContent = `Problem ${i + 1} of ${PROBLEMS.length}`;
+  document.getElementById('prob-intro').innerHTML = pr.intro;
+  document.getElementById('prob-site').textContent = pr.site;
+  document.getElementById('pka-note').innerHTML = pr.source;
+  for (const k of ['A', 'B']) {
+    const d = pr.drugs[k], el = document.getElementById('drug-' + k);
+    el.querySelector('.drug-name').innerHTML = `${d.name} <span>${d.sub}</span>`;
+    el.querySelector('.mol-b').innerHTML = renderMol(d.mol, false);
+    el.querySelector('.mol-a').innerHTML = renderMol(d.mol, true);
+    el.querySelector('.pka-val').textContent = d.pkaText || ('≈ ' + d.pka.toFixed(1));
+    document.querySelectorAll(`.q-opt[data-a="${k}"]`).forEach(b => b.textContent = d.btn);
   }
-};
+  resetQuestions();
+  if (pr.pkaUpfront) quizPanel.classList.add('pka-shown');
+}
 
 document.querySelectorAll('.q-opt').forEach(btn => btn.addEventListener('click', () => {
-  const q = +btn.dataset.q, a = btn.dataset.a, right = a === CORRECT[q];
+  const pr = PROB(), q = +btn.dataset.q, a = btn.dataset.a, right = a === pr.correct[q];
   document.querySelectorAll(`.q-opt[data-q="${q}"]`).forEach(b => {
     b.disabled = true;
-    if (b.dataset.a === CORRECT[q]) b.classList.add('right');
+    if (b.dataset.a === pr.correct[q]) b.classList.add('right');
   });
   if (!right) btn.classList.add('wrong');
   const fb = document.getElementById('fb' + q);
-  fb.innerHTML = FEEDBACK[q][a];
+  fb.innerHTML = pr.feedback[q][a];
   fb.className = 'feedback ' + (right ? 'ok' : 'no');
   // the answered question's glowing border fades out; the next question (or the test prompt) takes the focus
   const box = document.getElementById('q' + q); box.classList.remove('active'); box.classList.add('done');
@@ -1159,11 +1439,13 @@ document.querySelectorAll('.q-opt').forEach(btn => btn.addEventListener('click',
     q2Choice = a;
     document.querySelectorAll('.drug').forEach(d => d.classList.add('clickable'));
     document.getElementById('drug-' + a).classList.add('chosen');
-    testPrompt.innerHTML = `👆 Now click <b>${DRUGS[a].name}</b> to test it in the simulation. You can try the other drug afterwards.`;
+    testPrompt.innerHTML = `👆 Now click <b>${pr.drugs[a].name}</b> to test it in the simulation. You can try the other drug afterwards.`;
     testPrompt.style.display = 'block';
-    
+    if (probIdx < PROBLEMS.length - 1) newProbBtn.classList.add('show');
   }
 }));
+
+newProbBtn.addEventListener('click', () => loadProblem(probIdx + 1));
 
 const toast = document.getElementById('toast');
 let toastTimer = null;
@@ -1173,16 +1455,25 @@ function showToast(html) {
 }
 
 function testDrug(key) {
-  const d = DRUGS[key];
+  const d = PROB().drugs[key];
   pka = d.pka;
   pkaSlider.value = d.pka; pkaValue.textContent = d.pka.toFixed(2); updateHH();
   speedMult = 5.0;
   speedSlider.value = 5.0; speedValue.textContent = '5.0x';
-  particles = generateOutsideParticles(pka);
-  simTime = 0.0; ratioSamples = []; lastUpdateTime = 0.0; displayedTrappingRatio = 0.0;
+  // the first drug tested in a problem starts from a fresh cytosol; any later drug continues from the current distribution
+  const continuing = testedThisProblem;
+  if (!continuing) {
+    particles = generateOutsideParticles(pka);
+    simTime = 0.0; ratioSamples = []; lastUpdateTime = 0.0; displayedTrappingRatio = 0.0;
+  } else {
+    for (const p of particles) p.updateState(pka, simTime, true);   // re-protonate every molecule for the new pKa
+  }
+  testedThisProblem = true;
   paused = false; refreshPlayButton();
   quizWrap.classList.remove('open');
-  showToast(`Testing ${d.name} (pK<sub>a</sub> ≈ ${d.pka.toFixed(1)}) at maximum speed. Watch the trapping factor.`);
+  const fNeutral = 1 / (1 + Math.pow(10, d.pka - PH_CYTOSOL));
+  showToast(`Testing ${d.name} (pK<sub>a</sub> ${d.pkaText || ('≈ ' + d.pka.toFixed(1))}) at maximum speed${continuing ? ', starting from the current distribution' : ''}. Watch the trapping factor` +
+    (fNeutral < 0.1 ? `: only ${Math.round(fNeutral * 100)}% is neutral at pH 7, so it crosses slowly. Press ⏩ TIME-LAPSE to jump ahead to equilibrium.` : `, or press ⏩ TIME-LAPSE to jump ahead to equilibrium.`));
 }
 
 document.querySelectorAll('.drug').forEach(el => el.addEventListener('click', () => {
@@ -1192,18 +1483,9 @@ document.querySelectorAll('.drug').forEach(el => el.addEventListener('click', ()
   testDrug(el.dataset.drug);
 }));
 
-document.getElementById('q-restart').addEventListener('click', () => {
-  document.querySelectorAll('.q-opt').forEach(b => { b.disabled = false; b.classList.remove('right', 'wrong'); });
-  document.querySelectorAll('.feedback').forEach(f => { f.className = 'feedback'; f.innerHTML = ''; });
-  document.querySelectorAll('.drug').forEach(d => d.classList.remove('clickable', 'chosen'));
-  document.getElementById('q2').classList.add('locked');
-  document.querySelectorAll('.q-box').forEach(b => b.classList.remove('active', 'done'));
-  document.getElementById('q1').classList.add('active');
-  testPrompt.style.display = 'none';
-  q2Choice = null;
-  quizPanel.classList.remove('pka-shown');
-  quizPanel.scrollTop = 0;
-});
+// Start over repeats the current problem
+document.getElementById('q-restart').addEventListener('click', () => loadProblem(probIdx));
+loadProblem(0);
 
 // Hue slides smoothly on a log scale: 1x green (hue 130) -> ~5x yellow -> ~10x orange -> 25x and above red (hue 0)
 function trapColor(r) {
@@ -1219,7 +1501,9 @@ function animate(now) {
   const dt = Math.min((now - lastFrameTime) / 1000.0, 0.1);
   lastFrameTime = now;
 
-  if (!paused) {
+  if (lapseAnim) {
+    stepLapseAnim(now);
+  } else if (!paused) {
     // advance by real elapsed time (in 60 fps frames), split into sub-steps of at most one frame
     const frames = dt * 60, nSub = Math.max(1, Math.ceil(frames * Math.max(1, speedMult / 2.5) - 1e-6)), step = frames / nSub;
     for (let k = 0; k < nSub; k++) {
@@ -1271,8 +1555,7 @@ function animate(now) {
     if (d < rIn) nIn++; else if (d > rOut) nOut++;
   }
 
-  const areaIn = Math.PI * (LYSO_RADIUS ** 2);
-  const areaOut = Math.max(1.0, ((WORLD_W - 30) * (WORLD_H - 30)) - areaIn);
+  const [areaIn, areaOut] = areas();
   const concIn = (nIn / areaIn) * 10000;
   const concOut = (nOut / areaOut) * 10000;
   const instTrappingRatio = concOut > 0 ? concIn / concOut : 0;
