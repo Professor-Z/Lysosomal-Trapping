@@ -105,7 +105,16 @@
     #pka-note { display: none; }
     .pka-shown #pka-note { display: block; }
     .pka-shown #pka-hint { display: none; }
-    .q-box { border: 2px solid #facc15; border-radius: 0.6rem; padding: 0.15rem 0.85rem 0.8rem; margin-top: 0.8rem; background: rgba(250,204,21,0.04); }
+    .q-box { position: relative; border: 2px solid #facc15; border-radius: 0.6rem; padding: 0.15rem 0.85rem 0.8rem; margin-top: 0.8rem; background: rgba(250,204,21,0.04);
+      transition: border-color 0.9s, background-color 0.9s, opacity 0.6s; }
+    .q-box::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 0.9s;
+      animation: qGlow 1.6s ease-in-out infinite; }
+    .q-box.active { border-color: #fde047; background: rgba(250,204,21,0.08); }
+    .q-box.active::after { opacity: 1; }
+    .q-box.done { border-color: rgba(250,204,21,0.35); background: rgba(250,204,21,0.02); }
+    @keyframes qGlow { 0%,100% { box-shadow: 0 0 6px 1px rgba(250,204,21,0.5), inset 0 0 8px rgba(250,204,21,0.12); }
+      50% { box-shadow: 0 0 14px 4px rgba(253,224,71,0.9), inset 0 0 16px rgba(250,204,21,0.25); } }
+    #test-prompt { transition: opacity 0.6s; }
     .q-box.locked { opacity: 0.4; }
     .mol-acid { border-radius: 0.5rem; background: rgba(59,130,246,0.16); box-shadow: 0 0 0 1px rgba(96,165,250,0.55), 0 0 12px rgba(59,130,246,0.35); }
     .rxn-mid { display: flex; flex-direction: column; align-items: center; color: #e5e7eb; font-size: 0.8rem; white-space: nowrap; }
@@ -237,7 +246,7 @@
         <div>Ion Trapping of Weak Bases</div>
       </div>
       <div class="cp-group">
-        <span class="cp-label">Drug pK<sub>a</sub>:</span>
+        <span class="cp-label">Drug <span style="text-transform:none">pK<sub>a</sub></span>:</span>
         <input type="range" id="pka-slider" min="5" max="8" step="0.01" value="8">
         <span id="pka-value" class="cp-value">8.00</span>
       </div>
@@ -262,7 +271,7 @@
     <button class="q-close" id="q-close" title="Close">&times;</button>
     <h2>Test Your Understanding</h2>
     <div class="q-cols"><div>
-    <p>Medicinal chemists often place fluorine near a basic amine to tune its pK<sub>a</sub>. Genentech chemists did exactly this with two closely related Met kinase inhibitor drug candidates (anticancer agents). They differ by one fluorine next to the basic piperidine nitrogen:</p>
+    <p>To avoid lysosomal trapping of small molecules (which can lead to elevated toxicity), medicinal chemists often place fluorine near a basic amine to tune the pK<sub>a</sub> of a drug. Genentech chemists did exactly this with two closely related Met kinase inhibitor drug candidates (anticancer agents). They differ by one fluorine next to the basic piperidine nitrogen:</p>
 
     <div class="drug" id="drug-A" data-drug="A">
       <div class="drug-name">GEN-203 <span>(one fluorine near the amine)</span></div>
@@ -287,7 +296,7 @@
     <p id="pka-note" style="font-size:0.75rem;color:#9ca3af">Structures: Charifson, P. S.; Walters, W. P. <i>J. Med. Chem.</i> <b>2014</b>, 57, 9701–9717 (Figure 11A).</p>
 
     </div><div>
-    <div id="q1" class="q-box">
+    <div id="q1" class="q-box active">
       <h3>Question 1</h3>
       <p>Which drug is the <b>weaker base</b>? In other words, which one has a lone pair that is less available to accept H⁺ and form <b class="cbh">BH⁺</b>?</p>
       <div class="q-opts">
@@ -321,10 +330,10 @@
     <div class="i-cols">
       <div>
         <h3>Lysosomal trapping</h3>
-        <p>Lysosomes are acidic (pH ≈ 5) compared with the cytosol (pH ≈ 7). A neutral amine drug (<b class="cb">B:</b>, red) can cross the membrane, but inside it picks up a proton. The conjugate acid <b class="cbh">BH⁺</b> (blue with a white proton) cannot cross over the lipid bilayer, and so the drug builds up in the lysosome. This is lysosomal trapping and the degree to which it happens depends on the basicity of the drug.</p>
+        <p>Lysosomes are acidic (pH ≈ 5) compared with the cytosol (pH ≈ 7). A neutral amine drug (<b class="cb">B:</b>, red) can cross the hydrophobic membrane of the lysosome, but inside it picks up a proton to form the conjugate acid. As a cation, the conjugate acid <b class="cbh">BH⁺</b> (blue with a white proton) cannot cross back over the lipid bilayer, and so the drug builds up in the lysosome. This is lysosomal trapping and the degree to which it happens depends on the basicity of the drug.</p>
         <h3>Henderson–Hasselbalch equation</h3>
         <div class="hh-eq">pH = pK<sub>a</sub> + log <span class="fr"><span>[<span class="cb">B:</span>]</span><span>[<span class="cbh">BH⁺</span>]</span></span></div>
-        <p>When pH &lt; pK<sub>a</sub>, most of the drug is <b class="cbh">BH⁺</b>; when pH &gt; pK<sub>a</sub>, most is <b class="cb">B:</b>. The simulation uses this equation to decide, moment to moment, whether each molecule is <b class="cb">B:</b> or <b class="cbh">BH⁺</b> based on the pH of the compartment it is in. Because the lysosome is more acidic, a larger fraction of the drug exists in the ionized state <b class="cbh">BH⁺</b> when inside the lysosome.</p>
+        <p>According to the Henderson–Hasselbalch equation, when the pH of the environment is below the pK<sub>a</sub> of the drug, most of the molecule exists as the conjugate acid <b class="cbh">BH⁺</b>. If the pH of the environment is greater than the pK<sub>a</sub> of the drug, the majority of the molecule will exist in its neutral, basic form <b class="cb">B:</b>. The simulation uses this equation to decide, moment to moment, what fraction of the drug is <b class="cb">B:</b> or <b class="cbh">BH⁺</b> based on the pH of the compartment the molecule is currently located in. Because the lysosome is more acidic, a larger fraction of the drug exists in the ionized state <b class="cbh">BH⁺</b> when inside the lysosome.</p>
       </div>
       <div>
         <h3>How to use the simulation</h3>
@@ -1143,7 +1152,9 @@ document.querySelectorAll('.q-opt').forEach(btn => btn.addEventListener('click',
   const fb = document.getElementById('fb' + q);
   fb.innerHTML = FEEDBACK[q][a];
   fb.className = 'feedback ' + (right ? 'ok' : 'no');
-  if (q === 1) { document.getElementById('q2').classList.remove('locked'); quizPanel.classList.add('pka-shown'); }
+  // the answered question's glowing border fades out; the next question (or the test prompt) takes the focus
+  const box = document.getElementById('q' + q); box.classList.remove('active'); box.classList.add('done');
+  if (q === 1) { const q2 = document.getElementById('q2'); q2.classList.remove('locked'); q2.classList.add('active'); quizPanel.classList.add('pka-shown'); }
   if (q === 2) {
     q2Choice = a;
     document.querySelectorAll('.drug').forEach(d => d.classList.add('clickable'));
@@ -1186,6 +1197,8 @@ document.getElementById('q-restart').addEventListener('click', () => {
   document.querySelectorAll('.feedback').forEach(f => { f.className = 'feedback'; f.innerHTML = ''; });
   document.querySelectorAll('.drug').forEach(d => d.classList.remove('clickable', 'chosen'));
   document.getElementById('q2').classList.add('locked');
+  document.querySelectorAll('.q-box').forEach(b => b.classList.remove('active', 'done'));
+  document.getElementById('q1').classList.add('active');
   testPrompt.style.display = 'none';
   q2Choice = null;
   quizPanel.classList.remove('pka-shown');
